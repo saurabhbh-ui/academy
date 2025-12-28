@@ -1,94 +1,67 @@
 Errors: 
 
-2025-12-29 00:23:24,205 | app.api.io.router INFO: Finished processing file: othp33.pdf
-      INFO   127.0.0.1:57747 - "POST /api/io/parse HTTP/1.1" 200
-      INFO   127.0.0.1:63731 - "OPTIONS /api/chat/completion HTTP/1.1" 500
-Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 411, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 69, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\applications.py", line 112, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
-    raise exc
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\base.py", line 176, in __call__
-    with recv_stream, send_stream, collapse_excgroups():
-                                   ^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\contextlib.py", line 158, in __exit__
-    self.gen.throw(value)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
-    raise exc
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\base.py", line 178, in __call__
-    response = await self.dispatch_func(request, call_next)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\app.py", line 77, in logger_middleware
-    return await log_call(request, call_next)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\api\logging\middleware.py", line 18, in log_call
-    payload: dict = await request.json()
-                    ^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\requests.py", line 249, in json
-    self._json = json.loads(body)
-                 ^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\json\__init__.py", line 346, in loads
-    return _default_decoder.decode(s)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\json\decoder.py", line 338, in decode
-    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\json\decoder.py", line 356, in raw_decode
-    raise JSONDecodeError("Expecting value", s, err.value) from None
-json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
-      INFO   127.0.0.1:56111 - "OPTIONS /api/chat/completion HTTP/1.1" 500
-Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 411, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 69, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\applications.py", line 112, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
-    raise exc
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\base.py", line 176, in __call__
-    with recv_stream, send_stream, collapse_excgroups():
-                                   ^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\contextlib.py", line 158, in __exit__
-    self.gen.throw(value)
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
-    raise exc
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\middleware\base.py", line 178, in __call__
-    response = await self.dispatch_func(request, call_next)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\app.py", line 77, in logger_middleware
-    return await log_call(request, call_next)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\api\logging\middleware.py", line 18, in log_call
-    payload: dict = await request.json()
-                    ^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\sa007769\Downloads\data-fsi-aicademy-api\fsi-env\Lib\site-packages\starlette\requests.py", line 249, in json
-    self._json = json.loads(body)
-                 ^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\json\__init__.py", line 346, in loads
-    return _default_decoder.decode(s)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\json\decoder.py", line 338, in decode
-    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Program Files\Python312\Lib\json\decoder.py", line 356, in raw_decode
-    raise JSONDecodeError("Expecting value", s, err.value) from None
-json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+dispatchXhrRequest @ xhr.js:198
+xhr @ xhr.js:15
+dispatchRequest @ dispatchRequest.js:51
+_request @ Axios.js:185
+request @ Axios.js:40
+httpMethod @ Axios.js:224
+wrap @ bind.js:12
+generateOutline @ WorkflowPages.tsx:52
+(anonymous) @ WorkflowPages.tsx:34
+react_stack_bottom_frame @ react-dom-client.development.js:25989
+runWithFiberInDEV @ react-dom-client.development.js:871
+commitHookEffectListMount @ react-dom-client.development.js:13249
+commitHookPassiveMountEffects @ react-dom-client.development.js:13336
+reconnectPassiveEffects @ react-dom-client.development.js:15832
+doubleInvokeEffectsOnFiber @ react-dom-client.development.js:18703
+runWithFiberInDEV @ react-dom-client.development.js:871
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18667
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
+commitDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18712
+flushPassiveEffects @ react-dom-client.development.js:18439
+(anonymous) @ react-dom-client.development.js:17923
+performWorkUntilDeadline @ scheduler.development.js:45
+<OutlinePage>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:335
+App @ App.tsx:26
+react_stack_bottom_frame @ react-dom-client.development.js:25904
+renderWithHooksAgain @ react-dom-client.development.js:7762
+renderWithHooks @ react-dom-client.development.js:7674
+updateFunctionComponent @ react-dom-client.development.js:10166
+beginWork @ react-dom-client.development.js:11778
+runWithFiberInDEV @ react-dom-client.development.js:871
+performUnitOfWork @ react-dom-client.development.js:17641
+workLoopSync @ react-dom-client.development.js:17469
+renderRootSync @ react-dom-client.development.js:17450
+performWorkOnRoot @ react-dom-client.development.js:16504
+performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:18957
+performWorkUntilDeadline @ scheduler.development.js:45
+<App>
+exports.jsxDEV @ react-jsx-dev-runtime.development.js:335
+(anonymous) @ main.tsx:8
+
+
+Most importtant line : 
+Access to XMLHttpRequest at 'http://localhost:8000/api/outline/generate' from origin 'http://localhost:5173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
