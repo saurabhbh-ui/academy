@@ -7,5 +7,5 @@ export {
   ConnectPage,
   TestYourselfPage,
   ExecutiveSummaryPage,
-  NotFoundPage,
+  ReviewerPage,
 } from './WorkflowPages';

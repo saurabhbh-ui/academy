@@ -23,6 +23,13 @@ export async function* chatCompletion(data: {
   artifact: string;
   source: SourceDocument[];
   stage?: string;
+  config?: {
+    title: string;
+    tone: string;
+    brief_count: string;
+    sections_to_highlight?: string;
+    sections_to_exclude?: string;
+  };
 }) {
   yield* streamSSE('/api/chat/completion', data);
 }

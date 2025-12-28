@@ -11,7 +11,7 @@ import {
   ConnectPage,
   TestYourselfPage,
   ExecutiveSummaryPage,
-  NotFoundPage,
+  ReviewerPage,
 } from './pages';
 
 function App() {
@@ -30,7 +30,8 @@ function App() {
               <Route path="connect" element={<ConnectPage />} />
               <Route path="test-yourself" element={<TestYourselfPage />} />
               <Route path="summary" element={<ExecutiveSummaryPage />} />
-              <Route path="*" element={<NotFoundPage />} />
+              <Route path="reviewer" element={<ReviewerPage />} />
+              <Route path="*" element={<HomePage />} />
             </Route>
           </Routes>
         </BrowserRouter>

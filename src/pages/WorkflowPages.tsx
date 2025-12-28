@@ -1,29 +1,193 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
 import { ChatPanel } from '@/components/Chat';
 import { Button } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
-import { FileDown } from 'lucide-react';
+import { useWorkflow } from '@/providers/WorkflowProvider';
+import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
+import { apiClient } from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
+// ============================================================================
+// OUTLINE PAGE - Fully Integrated
+// ============================================================================
 export function OutlinePage() {
   const navigate = useNavigate();
-  const [content, setContent] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const {
+    parsedSources,
+    configuration,
+    outlineContent,
+    setOutlineContent,
+    setIsGenerating,
+    setCurrentStage,
+  } = useWorkflow();
 
-  const handleSendMessage = (message: string) => {
-    setMessages([...messages, { role: 'user', content: message }]);
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    setCurrentStage('outline');
+    if (!outlineContent && parsedSources.length > 0 && configuration) {
+      generateOutline();
+    } else {
+      setIsInitializing(false);
+    }
+  }, []);
+
+  const generateOutline = async () => {
+    if (!configuration || parsedSources.length === 0) {
+      console.error('Missing configuration or sources');
+      setIsInitializing(false);
+      return;
+    }
+
+    setIsGenerating(true);
+    setIsLoading(true);
+    setIsInitializing(true);
     
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'I understand you want to refine the outline. This feature will be connected in Phase 5.',
+    try {
+      let fullContent = '';
+      
+      const generator = chatCompletion({
+        messages: [{ role: 'user', content: `Generate a comprehensive outline for: ${configuration.title}` }],
+        artifact: '',
+        source: parsedSources,
+        stage: 'outline',
+        config: {
+          title: configuration.title,
+          tone: configuration.tone,
+          brief_count: configuration.numberOfBriefs,
+          sections_to_highlight: configuration.sectionsToHighlight || '',
+          sections_to_exclude: configuration.sectionsToExclude || '',
         },
-      ]);
-    }, 500);
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) {
+          fullContent += chunk.content;
+          setOutlineContent(fullContent);
+        }
+        if (chunk.artifact) {
+          setOutlineContent(chunk.artifact);
+          fullContent = chunk.artifact;
+        }
+      }
+
+      if (fullContent) {
+        setMessages([{ role: 'assistant', content: 'Outline generated successfully! Feel free to ask me to refine it.' }]);
+      }
+    } catch (error) {
+      console.error('Error generating outline:', error);
+      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the outline. Please check your backend connection.' }]);
+    } finally {
+      setIsGenerating(false);
+      setIsLoading(false);
+      setIsInitializing(false);
+    }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!parsedSources.length || !configuration) return;
+
+    setMessages((prev) => [...prev, { role: 'user', content: message }]);
+    setIsLoading(true);
+
+    try {
+      let response = '';
+      let updatedArtifact = outlineContent;
+      
+      const generator = chatCompletion({
+        messages: [...messages, { role: 'user', content: message }],
+        artifact: outlineContent,
+        source: parsedSources,
+        stage: 'outline',
+        config: {
+          title: configuration.title,
+          tone: configuration.tone,
+          brief_count: configuration.numberOfBriefs,
+          sections_to_highlight: configuration.sectionsToHighlight || '',
+          sections_to_exclude: configuration.sectionsToExclude || '',
+        },
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) response += chunk.content;
+        if (chunk.artifact) updatedArtifact = chunk.artifact;
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
+      if (updatedArtifact !== outlineContent) setOutlineContent(updatedArtifact);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
+    if (!parsedSources.length) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
+
+    try {
+      let newContent = '';
+      const generator = adjustLevel({
+        newLevel: level,
+        messages,
+        artifact: outlineContent,
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) newContent = chunk.content;
+      }
+
+      if (newContent) {
+        setOutlineContent(newContent);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Content adjusted to ${level} level.` }]);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the level.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
+    if (!parsedSources.length) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
+
+    try {
+      let newContent = '';
+      const generator = adjustLength({
+        newLength: length,
+        messages,
+        artifact: outlineContent,
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) newContent = chunk.content;
+      }
+
+      if (newContent) {
+        setOutlineContent(newContent);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Content made ${length}.` }]);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the length.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = () => {
@@ -34,23 +198,46 @@ export function OutlinePage() {
     console.log('Import outline');
   };
 
+  if (!parsedSources.length || !configuration) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-bold mb-2">No Configuration Found</h2>
+        <p className="text-muted-foreground mb-4">Please complete the configuration step first.</p>
+        <Button onClick={() => navigate('/configuration')}>Go to Configuration</Button>
+      </div>
+    );
+  }
+
   return (
     <WorkflowLayout
       title="Outline"
       description="Review and refine the generated content outline"
       canvas={
-        <Canvas
-          content={content}
-          onChange={setContent}
-          onExport={handleExport}
-          onImport={handleImport}
-        />
+        isInitializing ? (
+          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-lg font-medium">Generating outline...</p>
+              <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+            </div>
+          </div>
+        ) : (
+          <Canvas
+            content={outlineContent}
+            onChange={setOutlineContent}
+            onExport={handleExport}
+            onImport={handleImport}
+          />
+        )
       }
       chat={
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}
+          onAdjustLevel={handleAdjustLevel}
+          onAdjustLength={handleAdjustLength}
           placeholder="Ask AI to refine the outline..."
+          isLoading={isLoading}
         />
       }
       actions={
@@ -58,7 +245,7 @@ export function OutlinePage() {
           <Button variant="outline" onClick={() => navigate('/configuration')}>
             ← Back to Configuration
           </Button>
-          <Button onClick={() => navigate('/briefs')}>
+          <Button onClick={() => navigate('/briefs')} disabled={!outlineContent || isInitializing}>
             Continue to Briefs →
           </Button>
         </div>
@@ -67,50 +254,241 @@ export function OutlinePage() {
   );
 }
 
+// ============================================================================
+// BRIEFS PAGE - Fully Integrated
+// ============================================================================
 export function BriefsPage() {
   const navigate = useNavigate();
-  const [content, setContent] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const {
+    parsedSources,
+    configuration,
+    outlineContent,
+    briefsContent,
+    setBriefsContent,
+    setIsGenerating,
+    setCurrentStage,
+  } = useWorkflow();
 
-  const handleSendMessage = (message: string) => {
-    setMessages([...messages, { role: 'user', content: message }]);
-    
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'I understand you want to refine the brief. This feature will be connected in Phase 5.',
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [currentBriefIndex, setCurrentBriefIndex] = useState(0);
+  const [totalBriefs, setTotalBriefs] = useState(0);
+
+  useEffect(() => {
+    setCurrentStage('brief');
+    if (!briefsContent && outlineContent && parsedSources.length > 0 && configuration) {
+      generateBriefs();
+    } else {
+      setIsInitializing(false);
+    }
+  }, []);
+
+  const generateBriefs = async () => {
+    if (!configuration || !outlineContent || parsedSources.length === 0) {
+      console.error('Missing configuration, outline, or sources');
+      setIsInitializing(false);
+      return;
+    }
+
+    setIsGenerating(true);
+    setIsLoading(true);
+    setIsInitializing(true);
+
+    try {
+      // Step 1: Extract brief instructions from outline
+      const extractResponse = await apiClient.post('/api/brief/extract-instructions', {
+        config: {
+          title: configuration.title,
+          tone: configuration.tone,
+          brief_count: configuration.numberOfBriefs,
+          sections_to_highlight: configuration.sectionsToHighlight || '',
+          sections_to_exclude: configuration.sectionsToExclude || '',
         },
-      ]);
-    }, 500);
+        outline_artifact: {
+          content: outlineContent,
+        },
+      });
+
+      const briefInstructions = extractResponse.data.briefs;
+      setTotalBriefs(briefInstructions.length);
+
+      // Step 2: Generate each brief
+      let allBriefs = '';
+      for (let i = 0; i < briefInstructions.length; i++) {
+        setCurrentBriefIndex(i + 1);
+        
+        const response = await apiClient.post('/api/brief/generate', {
+          source: parsedSources,
+          brief_instructions: briefInstructions[i],
+        });
+
+        allBriefs += response.data.content + '\n\n---\n\n';
+        setBriefsContent(allBriefs);
+      }
+
+      setMessages([{ role: 'assistant', content: `Successfully generated ${briefInstructions.length} briefs!` }]);
+    } catch (error) {
+      console.error('Error generating briefs:', error);
+      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the briefs. Please check your backend connection.' }]);
+    } finally {
+      setIsGenerating(false);
+      setIsLoading(false);
+      setIsInitializing(false);
+    }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!parsedSources.length || !configuration) return;
+
+    setMessages((prev) => [...prev, { role: 'user', content: message }]);
+    setIsLoading(true);
+
+    try {
+      let response = '';
+      let updatedArtifact = briefsContent;
+      
+      const generator = chatCompletion({
+        messages: [...messages, { role: 'user', content: message }],
+        artifact: briefsContent,
+        source: parsedSources,
+        stage: 'brief',
+        config: {
+          title: configuration.title,
+          tone: configuration.tone,
+          brief_count: configuration.numberOfBriefs,
+          sections_to_highlight: configuration.sectionsToHighlight || '',
+          sections_to_exclude: configuration.sectionsToExclude || '',
+        },
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) response += chunk.content;
+        if (chunk.artifact) updatedArtifact = chunk.artifact;
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
+      if (updatedArtifact !== briefsContent) setBriefsContent(updatedArtifact);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
+    if (!parsedSources.length) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
+
+    try {
+      let newContent = '';
+      const generator = adjustLevel({
+        newLevel: level,
+        messages,
+        artifact: briefsContent,
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) newContent = chunk.content;
+      }
+
+      if (newContent) {
+        setBriefsContent(newContent);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Content adjusted to ${level} level.` }]);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the level.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
+    if (!parsedSources.length) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
+
+    try {
+      let newContent = '';
+      const generator = adjustLength({
+        newLength: length,
+        messages,
+        artifact: briefsContent,
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) newContent = chunk.content;
+      }
+
+      if (newContent) {
+        setBriefsContent(newContent);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Content made ${length}.` }]);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the length.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = () => {
-    console.log('Export brief');
+    console.log('Export briefs');
   };
 
   const handleImport = () => {
-    console.log('Import brief');
+    console.log('Import briefs');
   };
+
+  if (!parsedSources.length || !configuration || !outlineContent) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
+        <p className="text-muted-foreground mb-4">Please complete the outline step first.</p>
+        <Button onClick={() => navigate('/outline')}>Go to Outline</Button>
+      </div>
+    );
+  }
 
   return (
     <WorkflowLayout
       title="Briefs"
       description="Review and refine the detailed content briefs"
       canvas={
-        <Canvas
-          content={content}
-          onChange={setContent}
-          onExport={handleExport}
-          onImport={handleImport}
-        />
+        isInitializing ? (
+          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-lg font-medium">Generating briefs...</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {totalBriefs > 0 ? `Brief ${currentBriefIndex} of ${totalBriefs}` : 'This may take a few moments'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <Canvas
+            content={briefsContent}
+            onChange={setBriefsContent}
+            onExport={handleExport}
+            onImport={handleImport}
+          />
+        )
       }
       chat={
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}
+          onAdjustLevel={handleAdjustLevel}
+          onAdjustLength={handleAdjustLength}
           placeholder="Ask AI to refine the briefs..."
+          isLoading={isLoading}
         />
       }
       actions={
@@ -118,7 +496,7 @@ export function BriefsPage() {
           <Button variant="outline" onClick={() => navigate('/outline')}>
             ← Back to Outline
           </Button>
-          <Button onClick={() => navigate('/connect-configuration')}>
+          <Button onClick={() => navigate('/connect-configuration')} disabled={!briefsContent || isInitializing}>
             Continue to Connect Config →
           </Button>
         </div>
@@ -127,6 +505,9 @@ export function BriefsPage() {
   );
 }
 
+// ============================================================================
+// CONNECT CONFIG PAGE
+// ============================================================================
 export function ConnectConfigPage() {
   return (
     <div className="space-y-6 max-w-4xl">
@@ -144,23 +525,97 @@ export function ConnectConfigPage() {
   );
 }
 
+// ============================================================================
+// CONNECT PAGE - Fully Integrated
+// ============================================================================
 export function ConnectPage() {
   const navigate = useNavigate();
-  const [content, setContent] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const {
+    parsedSources,
+    briefsContent,
+    connectConfiguration,
+    connectContent,
+    setConnectContent,
+    setIsGenerating,
+    setCurrentStage,
+  } = useWorkflow();
 
-  const handleSendMessage = (message: string) => {
-    setMessages([...messages, { role: 'user', content: message }]);
-    
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'I understand you want to refine the scenario. This feature will be connected in Phase 5.',
-        },
-      ]);
-    }, 500);
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    setCurrentStage('connect');
+    if (!connectContent && briefsContent && parsedSources.length > 0 && connectConfiguration) {
+      generateConnect();
+    } else {
+      setIsInitializing(false);
+    }
+  }, []);
+
+  const generateConnect = async () => {
+    if (!connectConfiguration || !briefsContent || parsedSources.length === 0) {
+      console.error('Missing connect configuration, briefs, or sources');
+      setIsInitializing(false);
+      return;
+    }
+
+    setIsGenerating(true);
+    setIsLoading(true);
+    setIsInitializing(true);
+
+    try {
+      const response = await apiClient.post('/api/connect/generate-connect', {
+        source: parsedSources,
+        brief_artifact: { content: briefsContent },
+        character_roles: connectConfiguration.characterRoles || [],
+        artefacts: connectConfiguration.artefacts || [],
+        task_types: connectConfiguration.taskTypes || [],
+        question_types: connectConfiguration.questionTypes || [],
+      });
+
+      setConnectContent(response.data.content);
+      setMessages([{ role: 'assistant', content: response.data.response.content }]);
+    } catch (error) {
+      console.error('Error generating connect:', error);
+      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the connect tutorial.' }]);
+    } finally {
+      setIsGenerating(false);
+      setIsLoading(false);
+      setIsInitializing(false);
+    }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!parsedSources.length) return;
+
+    setMessages((prev) => [...prev, { role: 'user', content: message }]);
+    setIsLoading(true);
+
+    try {
+      let response = '';
+      let updatedArtifact = connectContent;
+      
+      const generator = chatCompletion({
+        messages: [...messages, { role: 'user', content: message }],
+        artifact: connectContent,
+        source: parsedSources,
+        stage: 'connect',
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) response += chunk.content;
+        if (chunk.artifact) updatedArtifact = chunk.artifact;
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
+      if (updatedArtifact !== connectContent) setConnectContent(updatedArtifact);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = () => {
@@ -171,23 +626,44 @@ export function ConnectPage() {
     console.log('Import connect');
   };
 
+  if (!parsedSources.length || !briefsContent || !connectConfiguration) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
+        <p className="text-muted-foreground mb-4">Please complete the briefs and connect configuration steps first.</p>
+        <Button onClick={() => navigate('/connect-configuration')}>Go to Connect Config</Button>
+      </div>
+    );
+  }
+
   return (
     <WorkflowLayout
       title="Connect"
-      description="Review and refine the scenario-based learning content"
+      description="Interactive scenario-based learning content"
       canvas={
-        <Canvas
-          content={content}
-          onChange={setContent}
-          onExport={handleExport}
-          onImport={handleImport}
-        />
+        isInitializing ? (
+          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-lg font-medium">Generating connect tutorial...</p>
+              <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+            </div>
+          </div>
+        ) : (
+          <Canvas
+            content={connectContent}
+            onChange={setConnectContent}
+            onExport={handleExport}
+            onImport={handleImport}
+          />
+        )
       }
       chat={
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}
-          placeholder="Ask AI to refine the scenario..."
+          placeholder="Ask AI to refine the connect tutorial..."
+          isLoading={isLoading}
         />
       }
       actions={
@@ -195,7 +671,7 @@ export function ConnectPage() {
           <Button variant="outline" onClick={() => navigate('/connect-configuration')}>
             ← Back to Connect Config
           </Button>
-          <Button onClick={() => navigate('/test-yourself')}>
+          <Button onClick={() => navigate('/test-yourself')} disabled={!connectContent || isInitializing}>
             Continue to Test Yourself →
           </Button>
         </div>
@@ -204,50 +680,152 @@ export function ConnectPage() {
   );
 }
 
+// ============================================================================
+// TEST YOURSELF PAGE - Fully Integrated
+// ============================================================================
 export function TestYourselfPage() {
   const navigate = useNavigate();
-  const [content, setContent] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const {
+    parsedSources,
+    briefsContent,
+    testContent,
+    setTestContent,
+    setIsGenerating,
+    setCurrentStage,
+  } = useWorkflow();
 
-  const handleSendMessage = (message: string) => {
-    setMessages([...messages, { role: 'user', content: message }]);
-    
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'I understand you want to refine the quiz. This feature will be connected in Phase 5.',
-        },
-      ]);
-    }, 500);
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    setCurrentStage('test_yourself');
+    if (!testContent && briefsContent) {
+      generateTest();
+    } else {
+      setIsInitializing(false);
+    }
+  }, []);
+
+  const generateTest = async () => {
+    if (!briefsContent) {
+      console.error('Missing briefs content');
+      setIsInitializing(false);
+      return;
+    }
+
+    setIsGenerating(true);
+    setIsLoading(true);
+    setIsInitializing(true);
+
+    try {
+      // Extract brief instructions from briefs
+      const briefInstructions = {
+        title: 'Test Questions',
+        learning_objectives: [],
+        summary: briefsContent,
+      };
+
+      const generator = apiClient.post('/api/testyourself/generate-test', {
+        artifact: { content: briefsContent },
+        brief_instructions: briefInstructions,
+      });
+
+      const response = await generator;
+      
+      // Handle streaming response
+      if (response.data) {
+        setTestContent(response.data);
+        setMessages([{ role: 'assistant', content: 'Test questions generated successfully!' }]);
+      }
+    } catch (error) {
+      console.error('Error generating test:', error);
+      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the test questions.' }]);
+    } finally {
+      setIsGenerating(false);
+      setIsLoading(false);
+      setIsInitializing(false);
+    }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!parsedSources.length) return;
+
+    setMessages((prev) => [...prev, { role: 'user', content: message }]);
+    setIsLoading(true);
+
+    try {
+      let response = '';
+      let updatedArtifact = testContent;
+      
+      const generator = chatCompletion({
+        messages: [...messages, { role: 'user', content: message }],
+        artifact: testContent,
+        source: parsedSources,
+        stage: 'test_yourself',
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) response += chunk.content;
+        if (chunk.artifact) updatedArtifact = chunk.artifact;
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
+      if (updatedArtifact !== testContent) setTestContent(updatedArtifact);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = () => {
-    console.log('Export quiz');
+    console.log('Export test');
   };
 
   const handleImport = () => {
-    console.log('Import quiz');
+    console.log('Import test');
   };
+
+  if (!briefsContent) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
+        <p className="text-muted-foreground mb-4">Please complete the briefs step first.</p>
+        <Button onClick={() => navigate('/briefs')}>Go to Briefs</Button>
+      </div>
+    );
+  }
 
   return (
     <WorkflowLayout
       title="Test Yourself"
-      description="Review and refine the assessment questions"
+      description="Self-assessment questions and exercises"
       canvas={
-        <Canvas
-          content={content}
-          onChange={setContent}
-          onExport={handleExport}
-          onImport={handleImport}
-        />
+        isInitializing ? (
+          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-lg font-medium">Generating test questions...</p>
+              <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+            </div>
+          </div>
+        ) : (
+          <Canvas
+            content={testContent}
+            onChange={setTestContent}
+            onExport={handleExport}
+            onImport={handleImport}
+          />
+        )
       }
       chat={
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}
-          placeholder="Ask AI to refine the questions..."
+          placeholder="Ask AI to refine the test questions..."
+          isLoading={isLoading}
         />
       }
       actions={
@@ -255,8 +833,8 @@ export function TestYourselfPage() {
           <Button variant="outline" onClick={() => navigate('/connect')}>
             ← Back to Connect
           </Button>
-          <Button onClick={() => navigate('/summary')}>
-            Continue to Summary →
+          <Button onClick={() => navigate('/executive-summary')} disabled={!testContent || isInitializing}>
+            Continue to Executive Summary →
           </Button>
         </div>
       }
@@ -264,23 +842,90 @@ export function TestYourselfPage() {
   );
 }
 
+// ============================================================================
+// EXECUTIVE SUMMARY PAGE - Fully Integrated
+// ============================================================================
 export function ExecutiveSummaryPage() {
   const navigate = useNavigate();
-  const [content, setContent] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const {
+    parsedSources,
+    summaryContent,
+    setSummaryContent,
+    setIsGenerating,
+    setCurrentStage,
+  } = useWorkflow();
 
-  const handleSendMessage = (message: string) => {
-    setMessages([...messages, { role: 'user', content: message }]);
-    
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'I understand you want to refine the summary. This feature will be connected in Phase 5.',
-        },
-      ]);
-    }, 500);
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    setCurrentStage('exsum');
+    if (!summaryContent && parsedSources.length > 0) {
+      generateSummary();
+    } else {
+      setIsInitializing(false);
+    }
+  }, []);
+
+  const generateSummary = async () => {
+    if (parsedSources.length === 0) {
+      console.error('Missing sources');
+      setIsInitializing(false);
+      return;
+    }
+
+    setIsGenerating(true);
+    setIsLoading(true);
+    setIsInitializing(true);
+
+    try {
+      const response = await apiClient.post('/api/exsum/generate-exsum', {
+        source: parsedSources,
+      });
+
+      setSummaryContent(response.data.content);
+      setMessages([{ role: 'assistant', content: response.data.response.content }]);
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the executive summary.' }]);
+    } finally {
+      setIsGenerating(false);
+      setIsLoading(false);
+      setIsInitializing(false);
+    }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!parsedSources.length) return;
+
+    setMessages((prev) => [...prev, { role: 'user', content: message }]);
+    setIsLoading(true);
+
+    try {
+      let response = '';
+      let updatedArtifact = summaryContent;
+      
+      const generator = chatCompletion({
+        messages: [...messages, { role: 'user', content: message }],
+        artifact: summaryContent,
+        source: parsedSources,
+        stage: 'exsum',
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) response += chunk.content;
+        if (chunk.artifact) updatedArtifact = chunk.artifact;
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
+      if (updatedArtifact !== summaryContent) setSummaryContent(updatedArtifact);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = () => {
@@ -291,14 +936,90 @@ export function ExecutiveSummaryPage() {
     console.log('Import summary');
   };
 
-  const handleExportAll = () => {
-    console.log('Export all steps');
-  };
+  if (!parsedSources.length) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
+        <p className="text-muted-foreground mb-4">Please upload source documents first.</p>
+        <Button onClick={() => navigate('/configuration')}>Go to Configuration</Button>
+      </div>
+    );
+  }
 
   return (
     <WorkflowLayout
       title="Executive Summary"
-      description="Review the complete learning content package"
+      description="High-level overview of the content"
+      canvas={
+        isInitializing ? (
+          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-lg font-medium">Generating executive summary...</p>
+              <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+            </div>
+          </div>
+        ) : (
+          <Canvas
+            content={summaryContent}
+            onChange={setSummaryContent}
+            onExport={handleExport}
+            onImport={handleImport}
+          />
+        )
+      }
+      chat={
+        <ChatPanel
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          placeholder="Ask AI to refine the summary..."
+          isLoading={isLoading}
+        />
+      }
+      actions={
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={() => navigate('/test-yourself')}>
+            ← Back to Test Yourself
+          </Button>
+          <Button onClick={() => navigate('/reviewer')} disabled={!summaryContent || isInitializing}>
+            Continue to Reviewer →
+          </Button>
+        </div>
+      }
+    />
+  );
+}
+
+// ============================================================================
+// REVIEWER PAGE - Placeholder (API endpoint exists but needs specific implementation)
+// ============================================================================
+export function ReviewerPage() {
+  const navigate = useNavigate();
+  const [content, setContent] = useState('');
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+
+  const handleSendMessage = (message: string) => {
+    setMessages([...messages, { role: 'user', content: message }]);
+    setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Reviewer functionality coming soon.' },
+      ]);
+    }, 500);
+  };
+
+  const handleExport = () => {
+    console.log('Export reviewer');
+  };
+
+  const handleImport = () => {
+    console.log('Import reviewer');
+  };
+
+  return (
+    <WorkflowLayout
+      title="Reviewer"
+      description="Quality assurance and content review"
       canvas={
         <Canvas
           content={content}
@@ -311,34 +1032,19 @@ export function ExecutiveSummaryPage() {
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}
-          placeholder="Ask AI to refine the summary..."
+          placeholder="Ask AI about the review..."
         />
       }
       actions={
         <div className="flex justify-between">
-          <Button variant="outline" onClick={() => navigate('/test-yourself')}>
-            ← Back to Test Yourself
+          <Button variant="outline" onClick={() => navigate('/executive-summary')}>
+            ← Back to Executive Summary
           </Button>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={handleExportAll}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Export All Steps
-            </Button>
-            <Button onClick={() => navigate('/')}>
-              Finish & Return Home
-            </Button>
-          </div>
+          <Button onClick={() => navigate('/configuration')}>
+            Start New Tutorial →
+          </Button>
         </div>
       }
     />
-  );
-}
-
-export function NotFoundPage() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <h1 className="text-4xl font-bold mb-2">404</h1>
-      <p className="text-muted-foreground">Page not found</p>
-    </div>
   );
 }
