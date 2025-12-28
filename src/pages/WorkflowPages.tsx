@@ -49,13 +49,8 @@ export function OutlinePage() {
     setIsInitializing(true);
     
     try {
-      let fullContent = '';
-      
-      const generator = chatCompletion({
-        messages: [{ role: 'user', content: `Generate a comprehensive outline for: ${configuration.title}` }],
-        artifact: '',
+      const response = await apiClient.post('/api/outline/generate', {
         source: parsedSources,
-        stage: 'outline',
         config: {
           title: configuration.title,
           tone: configuration.tone,
@@ -65,20 +60,8 @@ export function OutlinePage() {
         },
       });
 
-      for await (const chunk of generator) {
-        if (chunk.content) {
-          fullContent += chunk.content;
-          setOutlineContent(fullContent);
-        }
-        if (chunk.artifact) {
-          setOutlineContent(chunk.artifact);
-          fullContent = chunk.artifact;
-        }
-      }
-
-      if (fullContent) {
-        setMessages([{ role: 'assistant', content: 'Outline generated successfully! Feel free to ask me to refine it.' }]);
-      }
+      setOutlineContent(response.data.content);
+      setMessages([{ role: 'assistant', content: response.data.response.content }]);
     } catch (error) {
       console.error('Error generating outline:', error);
       setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the outline. Please check your backend connection.' }]);
