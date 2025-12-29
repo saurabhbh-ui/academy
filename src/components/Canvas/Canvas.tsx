@@ -51,10 +51,15 @@ export function Canvas({
     }
   }, [content, editor]);
 
-  const handleEditorChange = () => {
+  const handleEditorChange = async () => {
     if (onChange) {
-      const blocks = editor.document;
-      onChange(JSON.stringify(blocks));
+      try {
+        // Convert blocks back to markdown
+        const markdown = await editor.blocksToMarkdownLossy(editor.document);
+        onChange(markdown);
+      } catch (error) {
+        console.error('Error converting to markdown:', error);
+      }
     }
   };
 
