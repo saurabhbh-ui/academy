@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BlockNoteEditor } from '@blocknote/core';
-import type { PartialBlock } from '@blocknote/core';
 import { BlockNoteView } from '@blocknote/mantine';
 import '@blocknote/mantine/style.css';
 import { Button } from '@/components/UI';
@@ -33,78 +32,22 @@ export function Canvas({
 }: CanvasProps) {
   const [isEditing, setIsEditing] = useState(false);
 
-  // Convert markdown to BlockNote blocks
-  const convertMarkdownToBlocks = (markdown: string): PartialBlock[] => {
-    if (!markdown) {
-      return [
-        {
-          type: 'paragraph',
-          content: 'Your generated content will appear here...',
-        },
-      ];
-    }
-
-    // Try to parse as JSON first (for existing stored content)
-    try {
-      const parsed = JSON.parse(markdown);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch {
-      // Not JSON, treat as markdown
-    }
-
-    // Convert markdown to blocks
-    const lines = markdown.split('\n');
-    const blocks: PartialBlock[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) {
-        continue; // Skip empty lines
-      }
-
-      // Headings
-      if (line.startsWith('### ')) {
-        blocks.push({ type: 'heading', props: { level: 3 }, content: line.substring(4) });
-      } else if (line.startsWith('## ')) {
-        blocks.push({ type: 'heading', props: { level: 2 }, content: line.substring(3) });
-      } else if (line.startsWith('# ')) {
-        blocks.push({ type: 'heading', props: { level: 1 }, content: line.substring(2) });
-      }
-      // Bullet points
-      else if (line.trim().startsWith('- ')) {
-        blocks.push({ type: 'bulletListItem', content: line.trim().substring(2) });
-      }
-      // Numbered lists
-      else if (/^\d+\.\s/.test(line.trim())) {
-        blocks.push({ type: 'numberedListItem', content: line.trim().replace(/^\d+\.\s/, '') });
-      }
-      // Regular paragraphs
-      else {
-        blocks.push({ type: 'paragraph', content: line });
-      }
-    }
-
-    return blocks.length > 0 ? blocks : [{ type: 'paragraph', content: markdown }];
-  };
-
   const editor = useMemo(() => {
-    const initialContent = convertMarkdownToBlocks(content);
-
-    return BlockNoteEditor.create({
-      initialContent,
-    });
+    return BlockNoteEditor.create();
   }, []);
 
   useEffect(() => {
     // Update editor when content changes externally
     if (content) {
-      try {
-        const blocks = convertMarkdownToBlocks(content);
-        editor.replaceBlocks(editor.document, blocks);
-      } catch (error) {
-        console.error('Error parsing content:', error);
-      }
+      (async () => {
+        try {
+          // Use BlockNote's built-in markdown parser
+          const blocks = await editor.tryParseMarkdownToBlocks(content);
+          editor.replaceBlocks(editor.document, blocks);
+        } catch (error) {
+          console.error('Error parsing content:', error);
+        }
+      })();
     }
   }, [content, editor]);
 

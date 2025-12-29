@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
 import { ChatPanel } from '@/components/Chat';
-import { Button } from '@/components/UI';
+import { Button, Tabs } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
 import { useWorkflow } from '@/providers/WorkflowProvider';
 import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
@@ -257,6 +257,35 @@ export function BriefsPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [currentBriefIndex, setCurrentBriefIndex] = useState(0);
   const [totalBriefs, setTotalBriefs] = useState(0);
+  const [briefsList, setBriefsList] = useState<Array<{ id: string; title: string; content: string }>>([]);
+
+  // Parse briefs from content
+  const parseBriefs = (content: string) => {
+    const briefRegex = /## Brief (\d+):/g;
+    const matches = [...content.matchAll(briefRegex)];
+    
+    if (matches.length === 0) {
+      return [{ id: 'brief-1', title: 'Brief', content }];
+    }
+
+    const briefs: Array<{ id: string; title: string; content: string }> = [];
+    
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const briefNumber = match[1];
+      const startIndex = match.index! + match[0].length;
+      const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
+      const briefContent = content.substring(startIndex, endIndex).trim();
+      
+      briefs.push({
+        id: `brief-${briefNumber}`,
+        title: `Brief ${briefNumber}`,
+        content: `## Brief ${briefNumber}:\n\n${briefContent}`,
+      });
+    }
+
+    return briefs;
+  };
 
   useEffect(() => {
     setCurrentStage('brief');
@@ -264,8 +293,17 @@ export function BriefsPage() {
       generateBriefs();
     } else {
       setIsInitializing(false);
+      if (briefsContent) {
+        setBriefsList(parseBriefs(briefsContent));
+      }
     }
   }, []);
+
+  useEffect(() => {
+    if (briefsContent) {
+      setBriefsList(parseBriefs(briefsContent));
+    }
+  }, [briefsContent]);
 
   const generateBriefs = async () => {
     if (!configuration || !outlineContent || parsedSources.length === 0) {
@@ -455,6 +493,28 @@ export function BriefsPage() {
               </p>
             </div>
           </div>
+        ) : briefsList.length > 1 ? (
+          <Tabs
+            tabs={briefsList.map((brief) => ({
+              id: brief.id,
+              label: brief.title,
+              content: (
+                <Canvas
+                  content={brief.content}
+                  onChange={(newContent) => {
+                    // Update specific brief in the full content
+                    const updatedBriefs = briefsList.map((b) =>
+                      b.id === brief.id ? { ...b, content: newContent } : b
+                    );
+                    const fullContent = updatedBriefs.map((b) => b.content).join('\n\n---\n\n');
+                    setBriefsContent(fullContent);
+                  }}
+                  onExport={handleExport}
+                  onImport={handleImport}
+                />
+              ),
+            }))}
+          />
         ) : (
           <Canvas
             content={briefsContent}
