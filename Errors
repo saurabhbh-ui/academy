@@ -1,67 +1,157 @@
 Errors: 
 
-dispatchXhrRequest @ xhr.js:198
-xhr @ xhr.js:15
-dispatchRequest @ dispatchRequest.js:51
-_request @ Axios.js:185
-request @ Axios.js:40
-httpMethod @ Axios.js:224
-wrap @ bind.js:12
-generateOutline @ WorkflowPages.tsx:52
-(anonymous) @ WorkflowPages.tsx:34
-react_stack_bottom_frame @ react-dom-client.development.js:25989
-runWithFiberInDEV @ react-dom-client.development.js:871
-commitHookEffectListMount @ react-dom-client.development.js:13249
-commitHookPassiveMountEffects @ react-dom-client.development.js:13336
-reconnectPassiveEffects @ react-dom-client.development.js:15832
-doubleInvokeEffectsOnFiber @ react-dom-client.development.js:18703
-runWithFiberInDEV @ react-dom-client.development.js:871
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18667
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18673
-commitDoubleInvokeEffectsInDEV @ react-dom-client.development.js:18712
-flushPassiveEffects @ react-dom-client.development.js:18439
-(anonymous) @ react-dom-client.development.js:17923
-performWorkUntilDeadline @ scheduler.development.js:45
-<OutlinePage>
-exports.jsxDEV @ react-jsx-dev-runtime.development.js:335
-App @ App.tsx:26
-react_stack_bottom_frame @ react-dom-client.development.js:25904
-renderWithHooksAgain @ react-dom-client.development.js:7762
-renderWithHooks @ react-dom-client.development.js:7674
-updateFunctionComponent @ react-dom-client.development.js:10166
-beginWork @ react-dom-client.development.js:11778
-runWithFiberInDEV @ react-dom-client.development.js:871
-performUnitOfWork @ react-dom-client.development.js:17641
-workLoopSync @ react-dom-client.development.js:17469
-renderRootSync @ react-dom-client.development.js:17450
-performWorkOnRoot @ react-dom-client.development.js:16504
-performWorkOnRootViaSchedulerTask @ react-dom-client.development.js:18957
-performWorkUntilDeadline @ scheduler.development.js:45
-<App>
-exports.jsxDEV @ react-jsx-dev-runtime.development.js:335
-(anonymous) @ main.tsx:8
+VM239:1 
+ Uncaught SyntaxError: Unexpected token '#', "# Central "... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at Canvas.tsx:38:14
+    at Canvas (Canvas.tsx:36:18)
 
 
-Most importtant line : 
-Access to XMLHttpRequest at 'http://localhost:8000/api/outline/generate' from origin 'http://localhost:5173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+
+WorkflowPages.tsx:208  An error occurred in the <Canvas> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+
+WorkflowPages.tsx:208  An error occurred in the <Canvas> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+
+VM333:1 
+ Uncaught SyntaxError: Unexpected token '#', "# Title: C"... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at Canvas.tsx:38:14
+    at Canvas (Canvas.tsx:36:18)
+
+
+
+
+VM239:
+
+# Central Bank Digital Currencies: Foundational Principles and Core Features
+
+## Brief 1: Central Bank Digital Currencies: Foundational Principles and Core Features - Motivations, Challenges, and Risks of CBDC
+
+**Objectives**: On completion of this tutorial, you will be able to identify and evaluate the key motivations driving central bank digital currency (CBDC) research, understand the associated challenges and risks, and assess the implications for payment systems, monetary policy, and financial stability.
+
+**Overview**: The rapid digitalisation of payment systems and declining use of cash have prompted central banks to explore the potential of CBDCs. This tutorial examines the motivations, challenges, and risks associated with CBDC research, focusing on payment system resilience, financial inclusion, and monetary policy impacts. The content is based on Central Bank Digital Currencies: Foundational Principles and Core Features.
+
+**Content**:
+
+1. **Introduction Video Transcript**
+    - Introduce the tutorial suite, highlighting the global shift towards digital payments and the growing interest in CBDCs among central banks.
+    - Present a scenario where a central bank is evaluating the need for a CBDC to address declining cash usage and increasing digitalisation.
+    - Emphasise the importance of understanding motivations, risks, and challenges before any decision to issue a CBDC.
+    - Reference: (Document: CBDC, Sections: Executive summary; 1. Introduction)
+
+2. **Overall Tutorial Suite Details**
+    - Outline the scenario: a central bank facing declining cash usage, increased digital payments, and the need to ensure monetary and financial stability.
+    - Identify stakeholders: central banks, payment service providers, the public, and government agencies.
+    - Connect the scenario to the learning objectives: evaluating motivations, risks, and challenges of CBDC.
+    - Reference: (Document: CBDC, Sections: Executive summary; 1. Introduction)
+
+3. **Motivations for CBDC Research**
+    - Explain the diverse motivations for CBDC, including payment system resilience, financial inclusion, and cross-border payment improvements.
+    - Discuss differences between advanced and emerging economies in CBDC motivations.
+    - Reference: (Document: CBDC, Sections: 2. Motivations, challenges and risks; 2.1 Payment motivations and challenges)
+
+4. **Payment System Challenges and Opportunities**
+    - Analyse challenges such as declining access to cash, resilience, payments diversity, financial inclusion, and cross-border payments.
+    - Present opportunities for CBDC to address these challenges, including facilitating fiscal transfers and supporting public privacy.
+    - Reference: (Document: CBDC, Sections: 2.1 Payment motivations and challenges; Cross-border payments and CBDC)
+
+5. **Monetary Policy Motivations and Risks**
+    - Examine the potential for CBDC to enhance monetary policy transmission and the risks of blurring monetary and fiscal policy boundaries.
+    - Discuss the implications of interest-bearing CBDC and programmable monetary policy.
+    - Reference: (Document: CBDC, Section: 2.2 Monetary policy motivations and risks)
+
+6. **Financial Stability Risks**
+    - Assess risks such as bank disintermediation, destabilising digital runs, and loss of monetary sovereignty.
+    - Explore mitigants and the need for robust safeguards in CBDC design.
+    - Reference: (Document: CBDC, Section: 2.3 Financial stability risks)
+
+7. **Balancing Motivations and Risks**
+    - Summarise the need for central banks to balance opportunities and risks when considering CBDC issuance.
+    - Highlight the importance of jurisdiction-specific analysis and common principles.
+    - Reference: (Document: CBDC, Section: 2.4 Balancing motivations and risks)
+
+---
+
+## Brief 2: Central Bank Digital Currencies: Foundational Principles and Core Features - Foundational Principles and Core Features of CBDC
+
+**Objectives**: On completion of this tutorial, you will be able to describe the foundational principles guiding CBDC issuance and explain the core features required for a CBDC to fulfil central bank public policy objectives.
+
+**Overview**: Central banks share common public policy objectives that inform the foundational principles for CBDC issuance. This tutorial details these principles and the core features necessary for a CBDC to support monetary and financial stability, coexistence with other forms of money, and innovation. The content is based on Central Bank Digital Currencies: Foundational Principles and Core Features.
+
+**Content**:
+
+1. **Recap of Scenario and Tutorial Suite**
+    - Briefly revisit the scenario: a central bank evaluating CBDC to address evolving payment needs and maintain stability.
+    - Reiterate the relevance of foundational principles and core features in guiding CBDC design.
+    - Reference: (Document: CBDC, Sections: Executive summary; 1. Introduction)
+
+2. **Common Public Policy Objectives**
+    - Outline the shared objectives of central banks: monetary stability, financial stability, and broad access to safe payments.
+    - Reference: (Document: CBDC, Section: 3 Issuing a CBDC)
+
+3. **Three Foundational Principles for CBDC**
+    - Detail the principles: "Do no harm" to central bank mandates, coexistence with cash and private money, and promotion of innovation and efficiency.
+    - Explain the rationale and implications of each principle.
+    - Reference: (Document: CBDC, Section: 3.1 Three foundational principles)
+
+4. **Core Features of a CBDC Instrument**
+    - Present the instrument features: convertibility, convenience, acceptance, availability, and low cost.
+    - Discuss how these features support adoption and accessibility.
+    - Reference: (Document: CBDC, Section: 3.2 Core features; Table 1)
+
+5. **Core Features of the CBDC System**
+    - Summarise system features: security, instant settlement, resilience, availability, throughput, scalability, interoperability, flexibility, and adaptability.
+    - Highlight the importance of these features for operational effectiveness and user experience.
+    - Reference: (Document: CBDC, Section: 3.2 Core features; Table 1)
+
+6. **Institutional Features and Standards**
+    - Describe the need for a robust legal framework and regulatory standards for CBDC issuance and operation.
+    - Reference: (Document: CBDC, Section: 3.2 Core features; Table 1)
+
+---
+
+## Brief 3: Central Bank Digital Currencies: Foundational Principles and Core Features - CBDC Design, Technology, and Implementation Trade-offs
+
+**Objectives**: On completion of this tutorial, you will be able to analyse the design choices, technology considerations, and key trade-offs involved in implementing a CBDC, and understand the next steps for research and international collaboration.
+
+**Overview**: The design and implementation of CBDC require careful consideration of technology, system architecture, and trade-offs between competing objectives. This tutorial explores the main design choices, technology options, and practical challenges, concluding with recommendations for future research and collaboration. The content is based on Central Bank Digital Currencies: Foundational Principles and Core Features.
+
+**Content**:
+
+1. **Recap of Scenario and Tutorial Suite**
+    - Briefly revisit the scenario: a central bank planning the design and implementation of a CBDC.
+    - Emphasise the importance of design, technology, and trade-offs in achieving policy objectives.
+    - Reference: (Document: CBDC, Sections: Executive summary; 1. Introduction)
+
+2. **CBDC Design Choices**
+    - Analyse key design choices: instrument design (interest-bearing, caps/limits), ledger design (centralised, decentralised, hybrid), payment authentication, functionality, access, and governance.
+    - Reference: (Document: CBDC, Section: 4.1 Design choices)
+
+3. **Incentive and Business Model Considerations**
+    - Discuss cost recovery, public good aspects, and implications for ecosystem efficiency, competition, and innovation.
+    - Reference: (Document: CBDC, Section: 4.1.3 Incentive designs)
+
+4. **Technology Considerations for CBDC**
+    - Review technology options for convenience, security, resilience, scalability, interoperability, and adaptability.
+    - Present examples of cryptographic techniques, ledger technologies, and standards (e.g., ISO 20022).
+    - Reference: (Document: CBDC, Section: 4.2 Technology considerations; Table 2)
+
+5. **Key Trade-offs in CBDC Implementation**
+    - Examine trade-offs between security and speed, centralisation and decentralisation, user convenience and fraud prevention, and resilience and complexity.
+    - Discuss the impact of these trade-offs on system design and policy goals.
+    - Reference: (Document: CBDC, Section: 4.3 Key trade-offs)
+
+6. **Concluding Thoughts and Next Steps**
+    - Summarise the need for further research, experimentation, and international collaboration.
+    - Present recommendations for future work, including cross-border interoperability and stakeholder engagement.
+    - Reference: (Document: CBDC, Sections: 5. Concluding thoughts and next steps; Annex A: Questions to guide further research)
