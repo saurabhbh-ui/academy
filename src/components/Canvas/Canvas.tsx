@@ -33,15 +33,63 @@ export function Canvas({
 }: CanvasProps) {
   const [isEditing, setIsEditing] = useState(false);
 
+  // Convert markdown to BlockNote blocks
+  const convertMarkdownToBlocks = (markdown: string): PartialBlock[] => {
+    if (!markdown) {
+      return [
+        {
+          type: 'paragraph',
+          content: 'Your generated content will appear here...',
+        },
+      ];
+    }
+
+    // Try to parse as JSON first (for existing stored content)
+    try {
+      const parsed = JSON.parse(markdown);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Not JSON, treat as markdown
+    }
+
+    // Convert markdown to blocks
+    const lines = markdown.split('\n');
+    const blocks: PartialBlock[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue; // Skip empty lines
+      }
+
+      // Headings
+      if (line.startsWith('### ')) {
+        blocks.push({ type: 'heading', props: { level: 3 }, content: line.substring(4) });
+      } else if (line.startsWith('## ')) {
+        blocks.push({ type: 'heading', props: { level: 2 }, content: line.substring(3) });
+      } else if (line.startsWith('# ')) {
+        blocks.push({ type: 'heading', props: { level: 1 }, content: line.substring(2) });
+      }
+      // Bullet points
+      else if (line.trim().startsWith('- ')) {
+        blocks.push({ type: 'bulletListItem', content: line.trim().substring(2) });
+      }
+      // Numbered lists
+      else if (/^\d+\.\s/.test(line.trim())) {
+        blocks.push({ type: 'numberedListItem', content: line.trim().replace(/^\d+\.\s/, '') });
+      }
+      // Regular paragraphs
+      else {
+        blocks.push({ type: 'paragraph', content: line });
+      }
+    }
+
+    return blocks.length > 0 ? blocks : [{ type: 'paragraph', content: markdown }];
+  };
+
   const editor = useMemo(() => {
-    const initialContent: PartialBlock[] = content
-      ? JSON.parse(content)
-      : [
-          {
-            type: 'paragraph',
-            content: 'Your generated content will appear here...',
-          },
-        ];
+    const initialContent = convertMarkdownToBlocks(content);
 
     return BlockNoteEditor.create({
       initialContent,
@@ -52,7 +100,7 @@ export function Canvas({
     // Update editor when content changes externally
     if (content) {
       try {
-        const blocks = JSON.parse(content);
+        const blocks = convertMarkdownToBlocks(content);
         editor.replaceBlocks(editor.document, blocks);
       } catch (error) {
         console.error('Error parsing content:', error);
