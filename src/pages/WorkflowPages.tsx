@@ -292,6 +292,13 @@ export function BriefsPage() {
 
   useEffect(() => {
     setCurrentStage('brief');
+    
+    // Auto-redirect to /briefs/1 if at /briefs without index
+    if (!index && briefsContent) {
+      navigate('/briefs/1', { replace: true });
+      return;
+    }
+    
     if (!briefsContent && outlineContent && parsedSources.length > 0 && configuration) {
       generateBriefs();
     } else {
@@ -304,7 +311,14 @@ export function BriefsPage() {
 
   useEffect(() => {
     if (briefsContent) {
-      setBriefsList(parseBriefs(briefsContent));
+      const parsed = parseBriefs(briefsContent);
+      console.log('Parsed briefs:', parsed.length, 'Current index:', currentBriefIndex);
+      setBriefsList(parsed);
+      
+      // If we have briefs but no index in URL, redirect to first brief
+      if (!index && parsed.length > 0) {
+        navigate('/briefs/1', { replace: true });
+      }
     }
   }, [briefsContent]);
 
