@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
 import { ChatPanel } from '@/components/Chat';
-import { Button, Tabs } from '@/components/UI';
+import { Button } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
 import { useWorkflow } from '@/providers/WorkflowProvider';
 import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
@@ -242,6 +242,9 @@ export function OutlinePage() {
 // ============================================================================
 export function BriefsPage() {
   const navigate = useNavigate();
+  const { index } = useParams<{ index?: string }>();
+  const currentBriefIndex = index ? parseInt(index) - 1 : 0; // URL is 1-indexed, array is 0-indexed
+  
   const {
     parsedSources,
     configuration,
@@ -255,7 +258,7 @@ export function BriefsPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [currentBriefIndex, setCurrentBriefIndex] = useState(0);
+  const [generatingBriefIndex, setGeneratingBriefIndex] = useState(0);
   const [totalBriefs, setTotalBriefs] = useState(0);
   const [briefsList, setBriefsList] = useState<Array<{ id: string; title: string; content: string }>>([]);
 
@@ -337,7 +340,7 @@ export function BriefsPage() {
       // Step 2: Generate each brief
       let allBriefs = '';
       for (let i = 0; i < briefInstructions.length; i++) {
-        setCurrentBriefIndex(i + 1);
+        setGeneratingBriefIndex(i + 1);
         
         const response = await apiClient.post('/api/brief/generate', {
           source: parsedSources,
@@ -349,6 +352,9 @@ export function BriefsPage() {
       }
 
       setMessages([{ role: 'assistant', content: `Successfully generated ${briefInstructions.length} briefs!` }]);
+      
+      // Navigate to first brief after generation
+      navigate('/briefs/1');
     } catch (error) {
       console.error('Error generating briefs:', error);
       setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the briefs. Please check your backend connection.' }]);
@@ -480,7 +486,7 @@ export function BriefsPage() {
 
   return (
     <WorkflowLayout
-      title="Briefs"
+      title={briefsList.length > 0 && briefsList[currentBriefIndex] ? briefsList[currentBriefIndex].title : "Briefs"}
       description="Review and refine the detailed content briefs"
       canvas={
         isInitializing ? (
@@ -489,39 +495,28 @@ export function BriefsPage() {
               <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
               <p className="text-lg font-medium">Generating briefs...</p>
               <p className="text-sm text-muted-foreground mt-2">
-                {totalBriefs > 0 ? `Brief ${currentBriefIndex} of ${totalBriefs}` : 'This may take a few moments'}
+                {totalBriefs > 0 ? `Brief ${generatingBriefIndex} of ${totalBriefs}` : 'This may take a few moments'}
               </p>
             </div>
           </div>
-        ) : briefsList.length > 1 ? (
-          <Tabs
-            tabs={briefsList.map((brief) => ({
-              id: brief.id,
-              label: brief.title,
-              content: (
-                <Canvas
-                  content={brief.content}
-                  onChange={(newContent) => {
-                    // Update specific brief in the full content
-                    const updatedBriefs = briefsList.map((b) =>
-                      b.id === brief.id ? { ...b, content: newContent } : b
-                    );
-                    const fullContent = updatedBriefs.map((b) => b.content).join('\n\n---\n\n');
-                    setBriefsContent(fullContent);
-                  }}
-                  onExport={handleExport}
-                  onImport={handleImport}
-                />
-              ),
-            }))}
-          />
-        ) : (
+        ) : briefsList.length > 0 && briefsList[currentBriefIndex] ? (
           <Canvas
-            content={briefsContent}
-            onChange={setBriefsContent}
+            content={briefsList[currentBriefIndex].content}
+            onChange={(newContent) => {
+              // Update specific brief in the full content
+              const updatedBriefs = briefsList.map((b, i) =>
+                i === currentBriefIndex ? { ...b, content: newContent } : b
+              );
+              const fullContent = updatedBriefs.map((b) => b.content).join('\n\n---\n\n');
+              setBriefsContent(fullContent);
+            }}
             onExport={handleExport}
             onImport={handleImport}
           />
+        ) : (
+          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+            <p className="text-muted-foreground">No brief content available</p>
+          </div>
         )
       }
       chat={
@@ -536,12 +531,29 @@ export function BriefsPage() {
       }
       actions={
         <div className="flex justify-between">
-          <Button variant="outline" onClick={() => navigate('/outline')}>
-            ← Back to Outline
-          </Button>
-          <Button onClick={() => navigate('/connect-configuration')} disabled={!briefsContent || isInitializing}>
-            Continue to Connect Config →
-          </Button>
+          {currentBriefIndex > 0 ? (
+            <Button variant="outline" onClick={() => navigate(`/briefs/${currentBriefIndex}`)}>
+              ← Previous Brief
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => navigate('/outline')}>
+              ← Back to Outline
+            </Button>
+          )}
+          
+          <div className="text-sm text-muted-foreground">
+            {briefsList.length > 0 && `Brief ${currentBriefIndex + 1} of ${briefsList.length}`}
+          </div>
+          
+          {currentBriefIndex < briefsList.length - 1 ? (
+            <Button onClick={() => navigate(`/briefs/${currentBriefIndex + 2}`)}>
+              Next Brief →
+            </Button>
+          ) : (
+            <Button onClick={() => navigate('/connect-configuration')} disabled={!briefsContent}>
+              Continue to Connect Config →
+            </Button>
+          )}
         </div>
       }
     />
