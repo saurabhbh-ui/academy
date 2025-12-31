@@ -1,255 +1,361 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Label, Select, Textarea } from '@/components/UI';
-import { CONNECT_CONFIG_OPTIONS } from '@/constants';
+import { Button } from '@/components/UI';
+import { useWorkflow } from '@/providers/WorkflowProvider';
+
+// Constant options (matching original)
+const LEARNER_PROFILE_ROLE_OPTIONS = [
+  'Policy analyst',
+  'Supervisor',
+  'Regulatory specialist',
+  'Risk manager'
+];
+
+const LEARNER_PROFILE_DEPARTMENT_OPTIONS = [
+  'Policy department',
+  'Supervision department',
+  'Financial stability department',
+  'Innovation department'
+];
+
+const ARTEFACTS_OPTIONS = [
+  'Emails',
+  'Phone Calls',
+  'Press Reports',
+  'Live News',
+  'Financial Statements',
+  'Regulatory Filings'
+];
+
+const TASK_TYPES_OPTIONS = [
+  'Provide Advice',
+  'Provide Recommendation',
+  'Provide Report',
+  'Conduct Analysis'
+];
+
+const QUESTION_TYPES_OPTIONS = [
+  { value: 'fill-in-the-blank', label: 'Fill-in-the-Blank' },
+  { value: 'mcq', label: 'Multiple Choice Question' },
+  { value: 'true-false', label: 'True/False' }
+];
+
+const SCENARIO_DETAILS_COUNTRY_TYPE_OPTIONS = [
+  'Developed',
+  'Developing',
+  'Emerging Market'
+];
+
+const SCENARIO_DETAILS_AUTHORITY_TYPE_OPTIONS = [
+  'Banking',
+  'Insurance',
+  'Central bank',
+  'Integrated authority'
+];
+
+const SCENARIO_DETAILS_FINANCIAL_INSTITUTION_TYPE_OPTIONS = [
+  'Bank',
+  'Insurer',
+  'Investment Firm'
+];
+
+const CHARACTER_ROLES_OPTIONS = [
+  'Manager',
+  'Head of authority',
+  'CEO of bank',
+  'CEO of insurer',
+  'Project team members'
+];
 
 export function ConnectConfigForm() {
   const navigate = useNavigate();
+  const { setConnectConfiguration } = useWorkflow();
   
-  const [learnerProfile, setLearnerProfile] = useState('');
-  const [scenarioContext, setScenarioContext] = useState('');
-  const [scenarioType, setScenarioType] = useState('workplace');
-  const [protagonistRole, setProtagonistRole] = useState('');
-  const [protagonistName, setProtagonistName] = useState('');
-  const [settingLocation, setSettingLocation] = useState('');
-  const [settingTime, setSettingTime] = useState('');
-  const [artefacts, setArtefacts] = useState('');
-  const [tasks, setTasks] = useState('');
-  const [assessmentType, setAssessmentType] = useState('multiple_choice');
-  const [numberOfQuestions, setNumberOfQuestions] = useState('5');
+  const [formData, setFormData] = useState({
+    learnerProfileRole: '',
+    learnerProfileDepartment: '',
+    artefacts: [] as string[],
+    taskExamples: '',
+    taskTypes: [] as string[],
+    questionTypes: [] as string[],
+    scenarioDetailsCountryType: [] as string[],
+    scenarioDetailsAuthorityType: [] as string[],
+    scenarioDetailsFinancialInstitutionsType: [] as string[],
+    scenarioDescriptions: '',
+    characterRoles: [] as string[],
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // TODO: Store connect configuration (Phase 5)
-    console.log({
-      learnerProfile,
-      scenarioContext,
-      scenarioType,
-      protagonistRole,
-      protagonistName,
-      settingLocation,
-      settingTime,
-      artefacts,
-      tasks,
-      assessmentType,
-      numberOfQuestions,
-    });
-
-    // Navigate to connect generation page
+    setConnectConfiguration(formData);
     navigate('/connect');
   };
 
-  const isValid = learnerProfile.trim().length > 0 && scenarioContext.trim().length > 0;
+  const toggleMultiSelect = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: (prev[field as keyof typeof prev] as string[]).includes(value)
+        ? (prev[field as keyof typeof prev] as string[]).filter(v => v !== value)
+        : [...(prev[field as keyof typeof prev] as string[]), value]
+    }));
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Learner Profile */}
-      <div className="space-y-2">
-        <Label htmlFor="learnerProfile" className="text-base">
-          Learner Profile <span className="text-destructive">*</span>
-        </Label>
-        <p className="text-sm text-muted-foreground">
-          Describe the target audience for this learning content
-        </p>
-        <Textarea
-          id="learnerProfile"
-          placeholder="e.g., Junior bank employees with 1-2 years experience"
-          value={learnerProfile}
-          onChange={(e) => setLearnerProfile(e.target.value)}
-          rows={3}
-          required
-        />
-      </div>
+      <div className="grid grid-cols-2 gap-6">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Learner Profile */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Learner Profile</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Role</label>
+                <select
+                  value={formData.learnerProfileRole}
+                  onChange={(e) => setFormData({...formData, learnerProfileRole: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="">Select or type in...</option>
+                  {LEARNER_PROFILE_ROLE_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter or select the role that best represents the learner's position
+                </p>
+              </div>
 
-      {/* Scenario Details Section */}
-      <div className="rounded-lg border bg-muted/40 p-6 space-y-6">
-        <h3 className="text-lg font-semibold">Scenario Details</h3>
-
-        {/* Scenario Context */}
-        <div className="space-y-2">
-          <Label htmlFor="scenarioContext" className="text-base">
-            Scenario Context <span className="text-destructive">*</span>
-          </Label>
-          <Textarea
-            id="scenarioContext"
-            placeholder="e.g., A customer comes to the bank with a fraud complaint"
-            value={scenarioContext}
-            onChange={(e) => setScenarioContext(e.target.value)}
-            rows={3}
-            required
-          />
-        </div>
-
-        {/* Scenario Type */}
-        <div className="space-y-2">
-          <Label htmlFor="scenarioType" className="text-base">
-            Scenario Type
-          </Label>
-          <Select
-            id="scenarioType"
-            value={scenarioType}
-            onChange={(e) => setScenarioType(e.target.value)}
-          >
-            {CONNECT_CONFIG_OPTIONS.scenarioType.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      {/* Characters Section */}
-      <div className="rounded-lg border bg-muted/40 p-6 space-y-6">
-        <h3 className="text-lg font-semibold">Characters</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Protagonist Role */}
-          <div className="space-y-2">
-            <Label htmlFor="protagonistRole" className="text-base">
-              Protagonist Role
-            </Label>
-            <Input
-              id="protagonistRole"
-              placeholder="e.g., Branch Manager"
-              value={protagonistRole}
-              onChange={(e) => setProtagonistRole(e.target.value)}
-            />
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Department</label>
+                <select
+                  value={formData.learnerProfileDepartment}
+                  onChange={(e) => setFormData({...formData, learnerProfileDepartment: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="">Select or type in...</option>
+                  {LEARNER_PROFILE_DEPARTMENT_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter or select the department the learner is part of
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Protagonist Name */}
-          <div className="space-y-2">
-            <Label htmlFor="protagonistName" className="text-base">
-              Protagonist Name
-            </Label>
-            <Input
-              id="protagonistName"
-              placeholder="e.g., Sarah Johnson"
-              value={protagonistName}
-              onChange={(e) => setProtagonistName(e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Setting Section */}
-      <div className="rounded-lg border bg-muted/40 p-6 space-y-6">
-        <h3 className="text-lg font-semibold">Setting</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Location */}
-          <div className="space-y-2">
-            <Label htmlFor="settingLocation" className="text-base">
-              Location
-            </Label>
-            <Input
-              id="settingLocation"
-              placeholder="e.g., Downtown branch office"
-              value={settingLocation}
-              onChange={(e) => setSettingLocation(e.target.value)}
-            />
+          {/* Artefacts */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Artefacts / Information conveyance</h3>
+            <div>
+              <div className="space-y-2">
+                {ARTEFACTS_OPTIONS.map(opt => (
+                  <label key={opt} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.artefacts.includes(opt)}
+                      onChange={() => toggleMultiSelect('artefacts', opt)}
+                      className="rounded"
+                    />
+                    <span className="text-sm">{opt}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Select or type in the artefacts to be used
+              </p>
+            </div>
           </div>
 
-          {/* Time */}
-          <div className="space-y-2">
-            <Label htmlFor="settingTime" className="text-base">
-              Time Period
-            </Label>
-            <Input
-              id="settingTime"
-              placeholder="e.g., Morning rush hour"
-              value={settingTime}
-              onChange={(e) => setSettingTime(e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
+          {/* Tasks */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Tasks</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Task Examples</label>
+                <textarea
+                  value={formData.taskExamples}
+                  onChange={(e) => setFormData({...formData, taskExamples: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-md min-h-[100px]"
+                  placeholder=""
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Example tasks shaping the scenario
+                </p>
+              </div>
 
-      {/* Artefacts */}
-      <div className="space-y-2">
-        <Label htmlFor="artefacts" className="text-base">
-          Artefacts
-        </Label>
-        <p className="text-sm text-muted-foreground">
-          Documents, tools, or resources available in the scenario
-        </p>
-        <Textarea
-          id="artefacts"
-          placeholder="e.g., Customer complaint form, fraud detection checklist, internal policies"
-          value={artefacts}
-          onChange={(e) => setArtefacts(e.target.value)}
-          rows={3}
-        />
-      </div>
-
-      {/* Tasks */}
-      <div className="space-y-2">
-        <Label htmlFor="tasks" className="text-base">
-          Tasks
-        </Label>
-        <p className="text-sm text-muted-foreground">
-          What actions should the learner take in this scenario?
-        </p>
-        <Textarea
-          id="tasks"
-          placeholder="e.g., Investigate the complaint, document findings, escalate if necessary"
-          value={tasks}
-          onChange={(e) => setTasks(e.target.value)}
-          rows={3}
-        />
-      </div>
-
-      {/* Assessment Section */}
-      <div className="rounded-lg border bg-muted/40 p-6 space-y-6">
-        <h3 className="text-lg font-semibold">Assessment</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Assessment Type */}
-          <div className="space-y-2">
-            <Label htmlFor="assessmentType" className="text-base">
-              Assessment Type
-            </Label>
-            <Select
-              id="assessmentType"
-              value={assessmentType}
-              onChange={(e) => setAssessmentType(e.target.value)}
-            >
-              {CONNECT_CONFIG_OPTIONS.assessmentType.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Task Types</label>
+                <div className="space-y-2">
+                  {TASK_TYPES_OPTIONS.map(opt => (
+                    <label key={opt} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.taskTypes.includes(opt)}
+                        onChange={() => toggleMultiSelect('taskTypes', opt)}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter or select the task types the learner will be performing
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Number of Questions */}
-          <div className="space-y-2">
-            <Label htmlFor="numberOfQuestions" className="text-base">
-              Number of Questions
-            </Label>
-            <Select
-              id="numberOfQuestions"
-              value={numberOfQuestions}
-              onChange={(e) => setNumberOfQuestions(e.target.value)}
-            >
-              {CONNECT_CONFIG_OPTIONS.numberOfQuestions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+          {/* Question Types */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Question types</h3>
+            <div>
+              <div className="space-y-2">
+                {QUESTION_TYPES_OPTIONS.map(opt => (
+                  <label key={opt.value} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.questionTypes.includes(opt.value)}
+                      onChange={() => toggleMultiSelect('questionTypes', opt.value)}
+                      className="rounded"
+                    />
+                    <span className="text-sm">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Select the question types to be used
+              </p>
+            </div>
           </div>
         </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* Scenario Details */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Scenario Details</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Country Type</label>
+                <div className="space-y-2">
+                  {SCENARIO_DETAILS_COUNTRY_TYPE_OPTIONS.map(opt => (
+                    <label key={opt} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.scenarioDetailsCountryType.includes(opt)}
+                        onChange={() => toggleMultiSelect('scenarioDetailsCountryType', opt)}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter or select the type of country relevant to the scenario
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Authority Type</label>
+                <div className="space-y-2">
+                  {SCENARIO_DETAILS_AUTHORITY_TYPE_OPTIONS.map(opt => (
+                    <label key={opt} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.scenarioDetailsAuthorityType.includes(opt)}
+                        onChange={() => toggleMultiSelect('scenarioDetailsAuthorityType', opt)}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter or select the type of authority involved in the scenario
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Financial Institution Type</label>
+                <div className="space-y-2">
+                  {SCENARIO_DETAILS_FINANCIAL_INSTITUTION_TYPE_OPTIONS.map(opt => (
+                    <label key={opt} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.scenarioDetailsFinancialInstitutionsType.includes(opt)}
+                        onChange={() => toggleMultiSelect('scenarioDetailsFinancialInstitutionsType', opt)}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter or select the type of financial institution featured in the scenario
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Scenario Types */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Scenario Types</h3>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Scenario Description</label>
+              <textarea
+                value={formData.scenarioDescriptions}
+                onChange={(e) => setFormData({...formData, scenarioDescriptions: e.target.value})}
+                className="w-full px-3 py-2 border rounded-md min-h-[120px]"
+                placeholder=""
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Provide a brief description of the scenario outlining the key elements
+              </p>
+            </div>
+          </div>
+
+          {/* Other Characters */}
+          <div className="rounded-lg border p-6 bg-card">
+            <h3 className="text-lg font-semibold mb-4">Other characters to include</h3>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Character Roles</label>
+              <div className="space-y-2">
+                {CHARACTER_ROLES_OPTIONS.map(opt => (
+                  <label key={opt} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.characterRoles.includes(opt)}
+                      onChange={() => toggleMultiSelect('characterRoles', opt)}
+                      className="rounded"
+                    />
+                    <span className="text-sm">{opt}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Select or type in any other roles to be included in the scenario
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={() => navigate('/briefs')}>
-          Back
+      {/* Footer Buttons */}
+      <div className="flex justify-between pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => navigate('/briefs/1')}
+        >
+          ← Back
         </Button>
-        <Button type="submit" disabled={!isValid}>
-          Continue to Connect →
+        <Button type="submit">
+          Create connect →
         </Button>
       </div>
     </form>
