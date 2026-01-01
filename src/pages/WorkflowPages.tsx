@@ -613,6 +613,34 @@ export function ConnectPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // Parse briefs from content
+  const parseBriefs = (content: string) => {
+    const briefRegex = /## Brief (\d+):/g;
+    const matches = [...content.matchAll(briefRegex)];
+    
+    if (matches.length === 0) {
+      return [{ id: 'brief-1', title: 'Brief', content }];
+    }
+
+    const briefs: Array<{ id: string; title: string; content: string }> = [];
+    
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const briefNumber = match[1];
+      const startIndex = match.index! + match[0].length;
+      const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
+      const briefContent = content.substring(startIndex, endIndex).trim();
+      
+      briefs.push({
+        id: `brief-${briefNumber}`,
+        title: `Brief ${briefNumber}`,
+        content: `## Brief ${briefNumber}:\n\n${briefContent}`,
+      });
+    }
+
+    return briefs;
+  };
+
   useEffect(() => {
     setCurrentStage('connect');
     if (!connectContent && briefsContent && parsedSources.length > 0 && connectConfiguration) {
@@ -634,17 +662,35 @@ export function ConnectPage() {
     setIsInitializing(true);
 
     try {
+      // Parse briefs into array format
+      const briefsList = parseBriefs(briefsContent);
+      
       const response = await apiClient.post('/api/connect/generate-connect', {
-        source: parsedSources,
-        brief_artifact: { content: briefsContent },
-        character_roles: connectConfiguration.characterRoles || [],
-        artefacts: connectConfiguration.artefacts || [],
-        task_types: connectConfiguration.taskTypes || [],
-        question_types: connectConfiguration.questionTypes || [],
+        briefs: briefsList.map(brief => ({ content: brief.content })),
+        parsedOutline: {
+          briefs: briefsList.map((brief, index) => ({
+            brief_number: index + 1,
+            topic: brief.title || `Brief ${index + 1}`,
+            pages: [],
+          })),
+        },
+        config: {
+          role: connectConfiguration.learnerProfileRole,
+          department: connectConfiguration.learnerProfileDepartment,
+          countryType: connectConfiguration.scenarioDetailsCountryType,
+          authorityType: connectConfiguration.scenarioDetailsAuthorityType,
+          financialInstitution: connectConfiguration.scenarioDetailsFinancialInstitutionsType,
+          artefacts: connectConfiguration.artefacts,
+          characters: connectConfiguration.characterRoles,
+          keypoints: connectConfiguration.taskTypes,
+          taskExamples: connectConfiguration.taskExamples,
+          questions: connectConfiguration.questionTypes,
+          scenarioDescription: connectConfiguration.scenarioDescriptions,
+        },
       });
 
       setConnectContent(response.data.content);
-      setMessages([{ role: 'assistant', content: response.data.response.content }]);
+      setMessages([{ role: 'assistant', content: response.data.response?.content || 'Connect generated successfully!' }]);
     } catch (error) {
       console.error('Error generating connect:', error);
       setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the connect tutorial.' }]);
