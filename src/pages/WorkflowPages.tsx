@@ -9,7 +9,8 @@ import { useWorkflow } from '@/providers/WorkflowProvider';
 import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
 import { apiClient } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
-import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
+import axios from 'axios';
+import { parseBriefsContent, combineBriefsContent, extractBriefPages } from '@/lib/briefs';
 
 // ============================================================================
 // OUTLINE PAGE - Fully Integrated
@@ -626,6 +627,33 @@ export function ConnectPage() {
     [briefs, briefsContent]
   );
 
+  const formattedConnectConfig = useMemo(() => {
+    if (!connectConfiguration) return null;
+
+    return {
+      role: connectConfiguration.learnerProfileRole?.trim() || '',
+      department: connectConfiguration.learnerProfileDepartment?.trim() || '',
+      countryType: (connectConfiguration.scenarioDetailsCountryType || []).join(', '),
+      authorityType: (connectConfiguration.scenarioDetailsAuthorityType || []).join(', '),
+      financialInstitution: (connectConfiguration.scenarioDetailsFinancialInstitutionsType || []).join(', '),
+      artefacts: connectConfiguration.artefacts || [],
+      characters: connectConfiguration.characterRoles || [],
+      keypoints: connectConfiguration.taskTypes || [],
+      taskExamples: connectConfiguration.taskExamples || '',
+      questions: connectConfiguration.questionTypes || [],
+      scenarioDescription: connectConfiguration.scenarioDescriptions?.trim() || '',
+    };
+  }, [connectConfiguration]);
+
+  const isConnectConfigComplete = useMemo(() => {
+    if (!formattedConnectConfig) return false;
+    return Boolean(
+      formattedConnectConfig.role &&
+      formattedConnectConfig.department &&
+      formattedConnectConfig.scenarioDescription
+    );
+  }, [formattedConnectConfig]);
+
   useEffect(() => {
     setCurrentStage('connect');
   }, [setCurrentStage]);
@@ -636,15 +664,18 @@ export function ConnectPage() {
       return;
     }
 
-    if (availableBriefs.length > 0 && parsedSources.length > 0 && connectConfiguration) {
-      generateConnect(availableBriefs);
+    if (availableBriefs.length > 0 && parsedSources.length > 0 && isConnectConfigComplete) {
+      generateConnect(availableBriefs, formattedConnectConfig!);
     } else {
       setIsInitializing(false);
     }
-  }, [availableBriefs, connectConfiguration, connectContent, parsedSources.length]);
+  }, [availableBriefs, connectContent, formattedConnectConfig, isConnectConfigComplete, parsedSources.length]);
 
-  const generateConnect = async (briefList: typeof availableBriefs = availableBriefs) => {
-    if (!connectConfiguration || briefList.length === 0 || parsedSources.length === 0) {
+  const generateConnect = async (
+    briefList: typeof availableBriefs = availableBriefs,
+    config = formattedConnectConfig
+  ) => {
+    if (!config || briefList.length === 0 || parsedSources.length === 0) {
       console.error('Missing connect configuration, briefs, or sources');
       setIsInitializing(false);
       return;
@@ -661,21 +692,21 @@ export function ConnectPage() {
           briefs: briefList.map((brief, index) => ({
             brief_number: index + 1,
             topic: brief.title || `Brief ${index + 1}`,
-            pages: [],
+            pages: extractBriefPages(brief),
           })),
         },
         config: {
-          role: connectConfiguration.learnerProfileRole,
-          department: connectConfiguration.learnerProfileDepartment,
-          countryType: connectConfiguration.scenarioDetailsCountryType,
-          authorityType: connectConfiguration.scenarioDetailsAuthorityType,
-          financialInstitution: connectConfiguration.scenarioDetailsFinancialInstitutionsType,
-          artefacts: connectConfiguration.artefacts,
-          characters: connectConfiguration.characterRoles,
-          keypoints: connectConfiguration.taskTypes,
-          taskExamples: connectConfiguration.taskExamples,
-          questions: connectConfiguration.questionTypes,
-          scenarioDescription: connectConfiguration.scenarioDescriptions,
+          role: config.role,
+          department: config.department,
+          countryType: config.countryType,
+          authorityType: config.authorityType,
+          financialInstitution: config.financialInstitution,
+          artefacts: config.artefacts,
+          characters: config.characters,
+          keypoints: config.keypoints,
+          taskExamples: config.taskExamples,
+          questions: config.questions,
+          scenarioDescription: config.scenarioDescription,
         },
       });
 
@@ -683,7 +714,11 @@ export function ConnectPage() {
       setMessages([{ role: 'assistant', content: response.data.response?.content || 'Connect generated successfully!' }]);
     } catch (error) {
       console.error('Error generating connect:', error);
-      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the connect tutorial.' }]);
+      const errorMessage =
+        axios.isAxiosError(error) && error.response?.data
+          ? JSON.stringify(error.response.data, null, 2)
+          : 'Sorry, there was an error generating the connect tutorial.';
+      setMessages([{ role: 'assistant', content: errorMessage }]);
     } finally {
       setIsGenerating(false);
       setIsLoading(false);
@@ -731,11 +766,13 @@ export function ConnectPage() {
     console.log('Import connect');
   };
 
-  if (!parsedSources.length || availableBriefs.length === 0 || !connectConfiguration) {
+  if (!parsedSources.length || availableBriefs.length === 0 || !isConnectConfigComplete) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
-        <p className="text-muted-foreground mb-4">Please complete the briefs and connect configuration steps first.</p>
+        <p className="text-muted-foreground mb-4">
+          Please complete the briefs and connect configuration (role, department, and scenario description) first.
+        </p>
         <Button onClick={() => navigate('/connect-configuration')}>Go to Connect Config</Button>
       </div>
     );
