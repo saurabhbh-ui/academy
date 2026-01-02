@@ -1,38 +1,372 @@
-WorkflowPages.tsx:658 
- 
- POST http://localhost:8000/api/connect/generate-connect 422 (Unprocessable Entity)
-generateConnect	@	WorkflowPages.tsx:658
-(anonymous)	@	WorkflowPages.tsx:640
-WorkflowPages.tsx:658 
- 
- POST http://localhost:8000/api/connect/generate-connect 422 (Unprocessable Entity)
-WorkflowPages.tsx:685 
- Error generating connect: 
-AxiosError {message: 'Request failed with status code 422', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
-code
-: 
-"ERR_BAD_REQUEST"
-config
-: 
-{transitional: {…}, adapter: Array(3), transformRequest: Array(1), transformResponse: Array(1), timeout: 0, …}
-message
-: 
-"Request failed with status code 422"
-name
-: 
-"AxiosError"
-request
-: 
-XMLHttpRequest {onreadystatechange: null, readyState: 4, timeout: 0, withCredentials: false, upload: XMLHttpRequestUpload, …}
-response
-: 
-{data: {…}, status: 422, statusText: 'Unprocessable Entity', headers: AxiosHeaders, config: {…}, …}
-status
-: 
-422
-stack
-: 
-"AxiosError: Request failed with status code 422\n    at settle (http://localhost:5173/node_modules/.vite/deps/axios.js?v=bd2d3e80:1257:12)\n    at XMLHttpRequest.onloadend (http://localhost:5173/node_modules/.vite/deps/axios.js?v=bd2d3e80:1606:7)\n    at Axios.request (http://localhost:5173/node_modules/.vite/deps/axios.js?v=bd2d3e80:2223:41)\n    at async generateConnect (http://localhost:5173/src/pages/WorkflowPages.tsx:712:24)"
-[[Prototype]]
-: 
-Error
+payload:
+
+
+
+
+{
+  "artifact": {
+    "content": "string"
+  },
+  "brief_instructions": {
+    "title": "string",
+    "objectives": "string",
+    "overview": "string",
+    "content": "string"
+  }
+}
+
+
+
+Schemas: 
+import enum
+import logging
+from typing import List, Optional, Union
+
+from humps import camelize
+from openai.types.chat import ChatCompletionRole
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, Field, model_validator
+from typing_extensions import Literal, TypeAlias
+
+logger = logging.getLogger(__name__)
+
+
+class BaseModel(PydanticBaseModel):
+    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, use_enum_values=True)
+
+
+# ---------------------------------  Enums ---------------------------------- #
+# --------------------------------------------------------------------------- #
+
+
+@enum.unique
+class TutorialSuiteStage(str, enum.Enum):
+    outline = "outline"
+    brief = "brief"
+    test_yourself = "test_yourself"
+    connect = "connect"
+    exsum = "exsum"
+
+
+@enum.unique
+class BriefCount(str, enum.Enum):
+    one = "one"
+    two = "two"
+    three = "three"
+    four = "four"
+    five = "five"
+
+    __NUMERIC_MAP__ = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+    }
+
+    def to_numeric(self):
+        return self.__NUMERIC_MAP__[self.value]
+
+
+@enum.unique
+class Tone(str, enum.Enum):
+    basic = "basic"
+    intermediate = "intermediate"
+    advanced = "advanced"
+
+
+@enum.unique
+class SpecialisedTone(str, enum.Enum):
+    simple_and_clear = "simple_and_clear"
+    professional_and_concise = "professional_and_concise"
+    engaging_and_conversational = "engaging_and_conversational"
+    explanatory_and_visual = "explanatory_and_visual"
+    scenario_based_and_practical = "scenario_based_and_practical"
+    technical_and_analytical = "technical_and_analytical"
+    step_by_step_instructional = "step_by_step_instructional"
+    comparative_and_contextual = "comparative_and_contextual"
+    encouraging_and_motivational = "encouraging_and_motivational"
+    interactive_and_question_oriented = "interactive_and_question_oriented"
+
+    __PROMPT_MAP__ = {
+        "simple_and_clear": "The tone of each brief should emphasize plain language, avoid jargon, and explain complex concept with relatable examples. The target audience is entry-level.",
+        "professional_and_concise": "Each brief should use a formal and precise approach with minimal elaboration. The target audience is technical specialists.",
+        "engaging_and_conversational": "Each brief should create a welcoming atmosphere and encourages participation.",
+        "explanatory_and_visual": "Each brief should break down concepts into manageable parts to bridge knowledge gaps.",
+        "scenario_based_and_practical": "The breifs should focus on real-world applications to enhance understanding.",
+        "technical_and_analytical": "In-depth explanations with data and advanced terminology.",
+        "step_by_step_instructional": "Guides through processes or calculations.",
+        "comparative_and_contextual": "Each brief should explain international standards in comparison to regional practices or historical trends.",
+        "encouraging_and_motivational": "Each brief should emphasize the importance of the role of the trainee and build their confidence.",
+        "interactive_and_question_oriented": "Each brief should engage the audience by prompting critical thinking and self-reflection.",
+    }
+
+    def to_prompt_statement(self) -> str:
+        return self.__PROMPT_MAP__[self.value]
+
+
+@enum.unique
+class NewLevel(str, enum.Enum):
+    beginner = "Beginner"
+    intermediate = "Intermediate"
+    advanced = "Advanced"
+
+
+@enum.unique
+class NewLength(str, enum.Enum):
+    shortest = "shortest"
+    shorter = "shorter"
+    longer = "longer"
+    longest = "longest"
+
+    __PROMPT_MAP__ = {
+        "shortest": "much shorter than it currently is",
+        "shorter": "slightly shorter than it currently is",
+        "longer": "slightly longer than it currently is",
+        "longest": "much longer than it currently is",
+    }
+
+    def to_prompt_value(self) -> str:
+        return self.__PROMPT_MAP__[self.value]
+
+
+@enum.unique
+class EventType(str, enum.Enum):
+    on_rewrite_block = "on_rewrite_block"
+    on_rewrite_artifact = "on_rewrite_artifact"
+    on_chat_response = "on_chat_response"
+    on_progress_update = "on_progress_update"
+
+
+# ----------------------- Document & Artifact Models ------------------------ #
+# --------------------------------------------------------------------------- #
+
+
+class Figure(BaseModel):
+    id: str
+    b64image: str
+    caption: Optional[str]
+    footnote: Optional[str]
+    page_number: int
+
+
+class SourceDocument(BaseModel):
+    file_type: str = ".pdf"
+    content: str
+    figures: list[Figure]
+
+
+class TutorialConfiguration(BaseModel):
+    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, use_enum_values=False)
+
+    title: Optional[str]
+    tone: Optional[SpecialisedTone]
+    brief_count: BriefCount
+    sections_to_highlight: Optional[str] = None
+    sections_to_exclude: Optional[str] = None
+
+
+class Artifact(BaseModel):
+    content: str
+
+
+class ArtifactChunk(BaseModel):
+    block: str
+    selection: str
+
+
+class DocName(BaseModel):
+    header_title: str = Field(default="No title", description="Document name or should be main title of the document")
+
+
+# --------------------------- Event Stream Models --------------------------- #
+# --------------------------------------------------------------------------- #
+
+
+class StreamingEvent(BaseModel):
+    event: EventType
+    chunk: str
+
+
+# ------------------------------- Brief Models ------------------------------ #
+# --------------------------------------------------------------------------- #
+
+
+class BriefInstructions(BaseModel):
+    title: str = Field(description="The title of the brief, found in the '##' heading.")
+    objectives: str = Field(
+        description='The objectives of the brief, found in the paragraph starting with "**Objectives**" right after the heading. This is typically a single line, but could also be on several lines or a short bulleted list.'
+    )
+    overview: str = Field(
+        description='The overview of the brief, found in the paragraph starting with "**Overview**", typically after the objectives.'
+    )
+    content: str = Field(
+        description='The content of the brief, found in the paragraph starting with "**Content**", typically after the overview. This is is typically a long bulleted list.'
+    )
+
+
+class ParsedOutline(BaseModel):
+    briefs: list[BriefInstructions] = Field(..., min_length=1)
+
+
+# ----------------------- Refinement Request Models ------------------------- #
+# --------------------------------------------------------------------------- #
+
+# Create an extended role type to handle the error messages from the backend
+ExtendedChatCompletionRole: TypeAlias = Union[ChatCompletionRole, Literal["error"]]
+
+
+class ChatMessage(BaseModel):
+    role: ExtendedChatCompletionRole
+    content: str
+
+
+class BaseRefinementRequest(BaseModel):
+    messages: list[ChatMessage]
+    artifact: str
+    source: Union[SourceDocument, list[SourceDocument]]  # Updated to support both single and multiple documents
+
+    @model_validator(mode="before")
+    @classmethod
+    def filter_error_messages(cls, data: dict[str, any]) -> dict[str, any]:
+        if "messages" in data:
+            len_before = len(data["messages"])
+
+            # Filter out messages with role "error"
+            data["messages"] = [
+                msg for msg in data["messages"] if not (isinstance(msg, dict) and msg.get("role") == "error")
+            ]
+
+            len_after = len(data["messages"])
+            if len_after < len_before:
+                logger.info(f"Filtered {len_before - len_after} error messages")
+        return data
+
+
+class ChatCompletionRequest(BaseRefinementRequest):
+    stage: TutorialSuiteStage
+    config: Optional[TutorialConfiguration] = None
+    brief_instructions: Optional[BriefInstructions] = None
+    # source: Union[SourceDocument, list[SourceDocument]]  # Updated to support multiple documents
+
+    @model_validator(mode="after")
+    def validate_stage_requirements(self) -> "ChatCompletionRequest":
+        """
+        The optional `config` and `brief_instructions` are required depending on the stage.
+        This validator checks that they are provided for each possible stage.
+        """
+        match self.stage:
+            case TutorialSuiteStage.outline:
+                # For outline stage, config must be provided
+                if self.config is None:
+                    raise ValueError("config is required for the 'outline' stage")
+
+            # For brief stage, brief_instructions must be provided
+            case TutorialSuiteStage.brief:
+                if self.brief_instructions is None:
+                    raise ValueError("brief_instructions is required for the 'brief' stage")
+
+            case _:
+                if (self.brief_instructions is not None) or (self.config is not None):
+                    stage = self.stage
+                    raise ValueError(f"brief_instructions and config should NOT be provided for the '{stage}' stage")
+
+        return self
+
+
+class AdjusLengthRequest(BaseRefinementRequest):
+    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, use_enum_values=False)
+    new_length: NewLength
+
+
+class AdjustLevelRequest(BaseRefinementRequest):
+    model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, use_enum_values=False)
+    new_level: NewLevel
+
+
+class UpdateSelectionRequest(BaseModel):
+    messages: list[ChatMessage]
+    source: Union[SourceDocument, list[SourceDocument]]
+    artifact_chunk: ArtifactChunk
+    query: str
+
+
+# ------------------------- Complex Response Models-------------------------- #
+# --------------------------------------------------------------------------- #
+
+
+class ArtifactWithResponse(Artifact):
+    response: Optional[ChatMessage]
+
+
+# ------------------------------ Connect Models ----------------------------- #
+# --------------------------------------------------------------------------- #
+
+
+class ConnectConfig(BaseModel):
+    role: Optional[str] = Field(
+        default=None,
+        description="Professional role the learner assumes in the scenario. Can specify 'other' or any custom role.",
+    )
+    department: Optional[str] = Field(
+        default=None,
+        description="Functional department where the scenario is set. Can specify 'other' or any custom department.",
+    )
+    country_type: Optional[List[str]] = Field(
+        default=None, description="Classification of the country. Can specify 'other' or any custom type."
+    )
+    authority_type: Optional[List[str]] = Field(
+        default=None,
+        description="Type of regulatory or supervisory authority involved. Can specify 'other' or any custom type.",
+    )
+    financial_institution: Optional[List[str]] = Field(
+        default=None,
+        description="The kind of financial institution featured. Can specify 'other' or any custom institution.",
+    )
+    artefacts: Optional[List[str]] = Field(
+        default=None, description="Scenario information sources. Can specify 'other' or any custom sources."
+    )
+    characters: Optional[List[str]] = Field(
+        default=None, description="Fictional characters in the scenario. Can specify 'other' or any custom characters."
+    )
+    scenario_description: Optional[str] = Field(
+        default=None,
+        description="A brief narrative outlining the context or background of the scenario. It sets the stage for the learner by describing the situation they will address.",
+    )
+    keypoints: Optional[List[str]] = Field(default=None, description="Key tasks the learner must perform.")
+    task_examples: Optional[str] = Field(default=None, description="Example tasks shaping the scenario.")
+    questions: Optional[List[Literal["Fill-in-the-Blank", "Multiple Choice Question", "True/False", "Yes/No"]]] = Field(
+        default=None,
+        description="Types of questions to include. Possible values are: Fill-in-the-Blank, Multiple Choice Question, True/False.",
+    )
+
+
+class ConnectRequest(BaseModel):
+    briefs: list[Artifact]
+    parsed_outline: ParsedOutline
+    config: ConnectConfig
+
+
+######## reviewer models
+
+
+@enum.unique
+class ReviewModule(str, enum.Enum):
+    brief = "brief"
+    test_yourself = "test_yourself"
+    general = "general"  # For other modules without specific rules
+
+
+class ReviewRequest(BaseModel):
+    """Request model for content review"""
+
+    content: str = Field(..., description="The content to be reviewed", min_length=1)
+    module: ReviewModule = Field(
+        default=ReviewModule.general, description="The module type to determine which validation rules to apply"
+    )
+    source: Optional[Union[SourceDocument, List[SourceDocument]]] = Field(
+        default=None, description="Source document(s) for coverage validation (optional, recommended for brief module)"
+    )
+
+
+
