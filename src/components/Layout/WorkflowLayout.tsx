@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { GenerationProgress } from './GenerationProgress';
 
 interface WorkflowLayoutProps {
   title: string;
@@ -20,6 +21,7 @@ export function WorkflowLayout({
 }: WorkflowLayoutProps) {
   return (
     <div className="flex flex-col h-full max-w-full">
+      <GenerationProgress />
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-3xl font-bold tracking-tight">{title}</h2>
