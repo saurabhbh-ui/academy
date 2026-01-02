@@ -14,7 +14,7 @@ export function BriefsPage() {
   const navigate = useNavigate();
   const numericIndex = index ? Number(index) : 0;
   
-  const { briefsData, setBriefsData, setCurrentStage } = useWorkflow();
+  const { briefsData, setBriefsData, setCurrentStage, configuration } = useWorkflow();
 
   useEffect(() => {
     setCurrentStage('brief');
@@ -32,10 +32,17 @@ export function BriefsPage() {
     return null;
   }
 
+  // Get total number of briefs from configuration
+  const totalBriefs = typeof configuration?.numberOfBriefs === 'number' 
+    ? configuration.numberOfBriefs 
+    : 1;
+
   const onNext = () => {
-    if (briefsData && numericIndex === briefsData.length) {
+    if (numericIndex === totalBriefs) {
+      // Last brief - go to connect config
       navigate('/connect-configuration');
     } else {
+      // More briefs to go - navigate to next
       navigate(`/briefs/${numericIndex + 1}`);
     }
   };
@@ -54,6 +61,7 @@ export function BriefsPage() {
       briefIndex={numericIndex - 1}
       briefsData={briefsData}
       setBriefsData={setBriefsData}
+      totalBriefs={totalBriefs}
       onNext={onNext}
       onPrevious={onPrevious}
     />
@@ -65,12 +73,14 @@ function IndividualBrief({
   briefIndex,
   briefsData,
   setBriefsData,
+  totalBriefs,
   onNext,
   onPrevious,
 }: {
   briefIndex: number;
   briefsData: Array<{ content: string; title: string }> | null;
   setBriefsData: (data: Array<{ content: string; title: string }>) => void;
+  totalBriefs: number;
   onNext: () => void;
   onPrevious: () => void;
 }) {
@@ -285,7 +295,6 @@ function IndividualBrief({
     );
   }
 
-  const totalBriefs: number = briefsData?.length || (typeof configuration?.numberOfBriefs === 'number' ? configuration.numberOfBriefs : 1);
 
   return (
     <WorkflowLayout
