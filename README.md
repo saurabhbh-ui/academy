@@ -3,7 +3,7 @@
 ## ✅ What's Included
 
 - ✅ Full Phase 1-5 Frontend Code
-- ✅ ALL Workflow Pages Integrated with APIs
+- ✅ ALL Workflow Pages Integrated with APIs.
 - ✅ Auto-generation on all pages
 - ✅ Real-time streaming
 - ✅ Chat on all pages
