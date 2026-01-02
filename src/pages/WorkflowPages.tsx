@@ -10,7 +10,8 @@ import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
 import { apiClient } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import axios from 'axios';
-import { parseBriefsContent, combineBriefsContent, extractBriefPages } from '@/lib/briefs';
+import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
+import type { BriefInstructions } from '@/types';
 
 // ============================================================================
 // OUTLINE PAGE - Fully Integrated
@@ -56,9 +57,9 @@ export function OutlinePage() {
         config: {
           title: configuration.title,
           tone: configuration.tone,
-          brief_count: configuration.numberOfBriefs,
-          sections_to_highlight: configuration.sectionsToHighlight || '',
-          sections_to_exclude: configuration.sectionsToExclude || '',
+          briefCount: configuration.numberOfBriefs,
+          sectionsToHighlight: configuration.sectionsToHighlight || '',
+          sectionsToExclude: configuration.sectionsToExclude || '',
         },
       });
 
@@ -92,9 +93,9 @@ export function OutlinePage() {
         config: {
           title: configuration.title,
           tone: configuration.tone,
-          brief_count: configuration.numberOfBriefs,
-          sections_to_highlight: configuration.sectionsToHighlight || '',
-          sections_to_exclude: configuration.sectionsToExclude || '',
+          briefCount: configuration.numberOfBriefs,
+          sectionsToHighlight: configuration.sectionsToHighlight || '',
+          sectionsToExclude: configuration.sectionsToExclude || '',
         },
       });
 
@@ -252,6 +253,8 @@ export function BriefsPage() {
     outlineContent,
     briefsContent,
     briefs,
+    briefInstructions,
+    setBriefInstructions,
     setBriefsContent,
     setBriefs,
     setIsGenerating,
@@ -321,16 +324,17 @@ export function BriefsPage() {
         config: {
           title: configuration.title,
           tone: configuration.tone,
-          brief_count: configuration.numberOfBriefs,
-          sections_to_highlight: configuration.sectionsToHighlight || '',
-          sections_to_exclude: configuration.sectionsToExclude || '',
+          briefCount: configuration.numberOfBriefs,
+          sectionsToHighlight: configuration.sectionsToHighlight || '',
+          sectionsToExclude: configuration.sectionsToExclude || '',
         },
-        outline_artifact: {
+        outlineArtifact: {
           content: outlineContent,
         },
       });
 
-      const briefInstructions = extractResponse.data.briefs;
+      const briefInstructions = extractResponse.data.briefs as unknown as BriefInstructions[];
+      setBriefInstructions(briefInstructions);
       setTotalBriefs(briefInstructions.length);
 
       // Step 2: Generate each brief
@@ -340,7 +344,7 @@ export function BriefsPage() {
         
         const response = await apiClient.post('/api/brief/generate', {
           source: parsedSources,
-          brief_instructions: briefInstructions[i],
+          briefInstructions: briefInstructions[i],
         });
 
         const title =
@@ -352,6 +356,7 @@ export function BriefsPage() {
           id: `brief-${i + 1}`,
           title,
           content: response.data.content,
+          instructions: briefInstructions[i],
         });
 
         setBriefs([...generatedBriefs]);
@@ -377,6 +382,15 @@ export function BriefsPage() {
   const handleSendMessage = async (message: string) => {
     if (!parsedSources.length || !configuration || !currentBrief) return;
 
+    const instructionsForBrief =
+      currentBrief.instructions ||
+      briefInstructions[currentBriefIndex] || {
+        title: currentBrief.title || `Brief ${currentBriefIndex + 1}`,
+        objectives: '',
+        overview: '',
+        content: '',
+      };
+
     setMessages((prev) => [...prev, { role: 'user', content: message }]);
     setIsLoading(true);
 
@@ -389,13 +403,7 @@ export function BriefsPage() {
         artifact: currentBrief.content,
         source: parsedSources,
         stage: 'brief',
-        config: {
-          title: configuration.title,
-          tone: configuration.tone,
-          brief_count: configuration.numberOfBriefs,
-          sections_to_highlight: configuration.sectionsToHighlight || '',
-          sections_to_exclude: configuration.sectionsToExclude || '',
-        },
+        briefInstructions: instructionsForBrief,
       });
 
       for await (const chunk of generator) {
@@ -611,6 +619,7 @@ export function ConnectPage() {
     parsedSources,
     briefs,
     briefsContent,
+    briefInstructions,
     connectConfiguration,
     connectContent,
     setConnectContent,
@@ -621,6 +630,8 @@ export function ConnectPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const normalizeArray = (values?: string[]) =>
+    Array.from(new Set((values || []).map((value) => value.trim()).filter(Boolean)));
 
   const availableBriefs = useMemo(
     () => (briefs.length > 0 ? briefs : parseBriefsContent(briefsContent || '')),
@@ -633,14 +644,14 @@ export function ConnectPage() {
     return {
       role: connectConfiguration.learnerProfileRole?.trim() || '',
       department: connectConfiguration.learnerProfileDepartment?.trim() || '',
-      countryType: (connectConfiguration.scenarioDetailsCountryType || []).join(', '),
-      authorityType: (connectConfiguration.scenarioDetailsAuthorityType || []).join(', '),
-      financialInstitution: (connectConfiguration.scenarioDetailsFinancialInstitutionsType || []).join(', '),
-      artefacts: connectConfiguration.artefacts || [],
-      characters: connectConfiguration.characterRoles || [],
-      keypoints: connectConfiguration.taskTypes || [],
+      countryType: normalizeArray(connectConfiguration.scenarioDetailsCountryType),
+      authorityType: normalizeArray(connectConfiguration.scenarioDetailsAuthorityType),
+      financialInstitution: normalizeArray(connectConfiguration.scenarioDetailsFinancialInstitutionsType),
+      artefacts: normalizeArray(connectConfiguration.artefacts),
+      characters: normalizeArray(connectConfiguration.characterRoles),
+      keypoints: normalizeArray(connectConfiguration.taskTypes),
       taskExamples: connectConfiguration.taskExamples || '',
-      questions: connectConfiguration.questionTypes || [],
+      questions: normalizeArray(connectConfiguration.questionTypes),
       scenarioDescription: connectConfiguration.scenarioDescriptions?.trim() || '',
     };
   }, [connectConfiguration]);
@@ -686,14 +697,20 @@ export function ConnectPage() {
     setIsInitializing(true);
 
     try {
+      const outlineBriefs = briefList.map((brief, index) => {
+        const instructions = brief.instructions || briefInstructions[index];
+        return {
+          title: instructions?.title || brief.title || `Brief ${index + 1}`,
+          objectives: instructions?.objectives || '',
+          overview: instructions?.overview || '',
+          content: instructions?.content || '',
+        };
+      });
+
       const response = await apiClient.post('/api/connect/generate-connect', {
         briefs: briefList.map(brief => ({ content: brief.content })),
         parsedOutline: {
-          briefs: briefList.map((brief, index) => ({
-            brief_number: index + 1,
-            topic: brief.title || `Brief ${index + 1}`,
-            pages: extractBriefPages(brief),
-          })),
+          briefs: outlineBriefs,
         },
         config: {
           role: config.role,
@@ -875,7 +892,7 @@ export function TestYourselfPage() {
 
       const generator = apiClient.post('/api/testyourself/generate-test', {
         artifact: { content: combinedBriefsContent },
-        brief_instructions: briefInstructions,
+        briefInstructions,
       });
 
       const response = await generator;

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { SourceDocument, Configuration, ConnectConfiguration, Brief } from '@/types';
+import type { SourceDocument, Configuration, ConnectConfiguration, Brief, BriefInstructions } from '@/types';
 
 interface WorkflowState {
   // Configuration
@@ -8,6 +8,7 @@ interface WorkflowState {
   parsedSources: SourceDocument[];
   configuration: Configuration | null;
   connectConfiguration: ConnectConfiguration | null;
+  briefInstructions: BriefInstructions[];
   
   // Content
   outlineContent: string;
@@ -27,6 +28,7 @@ interface WorkflowContextType extends WorkflowState {
   setParsedSources: (sources: SourceDocument[]) => void;
   setConfiguration: (config: Configuration) => void;
   setConnectConfiguration: (config: ConnectConfiguration) => void;
+  setBriefInstructions: (instructions: BriefInstructions[]) => void;
   setOutlineContent: (content: string) => void;
   setBriefsContent: (content: string) => void;
   setBriefs: (briefs: Brief[]) => void;
@@ -45,6 +47,7 @@ const initialState: WorkflowState = {
   parsedSources: [],
   configuration: null,
   connectConfiguration: null,
+  briefInstructions: [],
   outlineContent: '',
   briefsContent: '',
   briefs: [],
@@ -72,6 +75,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   const setConnectConfiguration = useCallback((config: ConnectConfiguration) => {
     setState((prev) => ({ ...prev, connectConfiguration: config }));
+  }, []);
+
+  const setBriefInstructions = useCallback((instructions: BriefInstructions[]) => {
+    setState((prev) => ({ ...prev, briefInstructions: instructions }));
   }, []);
 
   const setOutlineContent = useCallback((content: string) => {
@@ -118,6 +125,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         setParsedSources,
         setConfiguration,
         setConnectConfiguration,
+        setBriefInstructions,
         setOutlineContent,
         setBriefsContent,
         setBriefs,
