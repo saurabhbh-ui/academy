@@ -6,7 +6,7 @@ import { ChatPanel } from '@/components/Chat';
 import { Button } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
 import { useWorkflow } from '@/providers/WorkflowProvider';
-import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
+import { chatCompletion, adjustLength, adjustLevel, exportArtifact, importArtifact } from '@/lib/apiService';
 import { apiClient, streamSSE } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
@@ -1075,6 +1075,7 @@ export function ExecutiveSummaryPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setCurrentStage('exsum');
@@ -1113,6 +1114,17 @@ export function ExecutiveSummaryPage() {
     }
   };
 
+  const handleRegenerate = async () => {
+    if (!parsedSources.length) return;
+    
+    if (!window.confirm('Are you sure you want to regenerate the executive summary? This will discard any manual edits.')) {
+      return;
+    }
+
+    setMessages([]);
+    await generateSummary();
+  };
+
   const handleSendMessage = async (message: string) => {
     if (!parsedSources.length) return;
 
@@ -1145,12 +1157,120 @@ export function ExecutiveSummaryPage() {
     }
   };
 
-  const handleExport = () => {
-    console.log('Export summary');
+  const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
+    if (!parsedSources.length || !summaryContent) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
+
+    try {
+      let newContent = '';
+      const generator = adjustLevel({
+        newLevel: level,
+        messages,
+        artifact: summaryContent,
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) newContent = chunk.content;
+      }
+
+      if (newContent) {
+        setSummaryContent(newContent);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Executive summary adjusted to ${level} level.` }]);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the level.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
+    if (!parsedSources.length || !summaryContent) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
+
+    try {
+      let newContent = '';
+      const generator = adjustLength({
+        newLength: length,
+        messages,
+        artifact: summaryContent,
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.content) newContent = chunk.content;
+      }
+
+      if (newContent) {
+        setSummaryContent(newContent);
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Executive summary made ${length}.` }]);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the length.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!summaryContent) {
+      alert('No content to export');
+      return;
+    }
+
+    try {
+      const blob = await exportArtifact(summaryContent);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `executive-summary-${Date.now()}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setMessages((prev) => [...prev, { 
+        role: 'assistant', 
+        content: 'Executive summary exported successfully!' 
+      }]);
+    } catch (error) {
+      console.error('Error exporting:', error);
+      alert('Failed to export document. Please try again.');
+    }
   };
 
   const handleImport = () => {
-    console.log('Import summary');
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsLoading(true);
+      const result = await importArtifact(file);
+      setSummaryContent(result.content);
+      setMessages((prev) => [...prev, { 
+        role: 'assistant', 
+        content: 'Document imported successfully! You can now edit or refine the content.' 
+      }]);
+    } catch (error) {
+      console.error('Error importing:', error);
+      alert('Failed to import document. Please make sure it\'s a valid Word document.');
+    } finally {
+      setIsLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   if (!parsedSources.length) {
@@ -1166,7 +1286,7 @@ export function ExecutiveSummaryPage() {
   return (
     <WorkflowLayout
       title="Executive Summary"
-      description="High-level overview of the content"
+      description="High-level overview of the entire learning content"
       canvas={
         isInitializing ? (
           <div className="flex items-center justify-center h-full border rounded-lg bg-card">
@@ -1177,19 +1297,30 @@ export function ExecutiveSummaryPage() {
             </div>
           </div>
         ) : (
-          <Canvas
-            content={summaryContent}
-            onChange={setSummaryContent}
-            onExport={handleExport}
-            onImport={handleImport}
-          />
+          <>
+            <Canvas
+              content={summaryContent}
+              onChange={setSummaryContent}
+              onExport={handleExport}
+              onImport={handleImport}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
+          </>
         )
       }
       chat={
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}
-          placeholder="Ask AI to refine the summary..."
+          onAdjustLevel={handleAdjustLevel}
+          onAdjustLength={handleAdjustLength}
+          placeholder="Ask AI to refine the executive summary..."
           isLoading={isLoading}
         />
       }
@@ -1198,9 +1329,18 @@ export function ExecutiveSummaryPage() {
           <Button variant="outline" onClick={() => navigate('/test-yourself')}>
             ← Back to Test Yourself
           </Button>
-          <Button onClick={() => navigate('/reviewer')} disabled={!summaryContent || isInitializing}>
-            Continue to Reviewer →
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleRegenerate}
+              disabled={isLoading || isInitializing}
+            >
+              🔄 Regenerate Summary
+            </Button>
+            <Button onClick={() => navigate('/reviewer')} disabled={!summaryContent || isInitializing}>
+              Continue to Reviewer →
+            </Button>
+          </div>
         </div>
       }
     />
