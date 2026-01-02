@@ -12,6 +12,8 @@ import { Loader2 } from 'lucide-react';
 import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
 import type { ConnectConfiguration } from '@/types';
 
+let lastTestGenerationSignature: string | null = null;
+
 // ============================================================================
 // OUTLINE PAGE - Fully Integrated
 // ============================================================================
@@ -893,11 +895,20 @@ export function TestYourselfPage() {
 
   useEffect(() => {
     setCurrentStage('test_yourself');
-    if (!testContent && combinedBriefsContent) {
-      generateTest();
-    } else {
+    if (!combinedBriefsContent || testContent) {
       setIsInitializing(false);
+      return;
     }
+
+    // Avoid duplicate requests in React StrictMode by only generating when the
+    // combined briefs content changes (new signature).
+    if (combinedBriefsContent === lastTestGenerationSignature) {
+      setIsInitializing(false);
+      return;
+    }
+
+    lastTestGenerationSignature = combinedBriefsContent;
+    generateTest();
   }, [combinedBriefsContent, testContent]);
 
   const generateTest = async () => {
