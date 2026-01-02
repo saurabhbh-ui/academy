@@ -7,7 +7,7 @@ import { Button } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
 import { useWorkflow } from '@/providers/WorkflowProvider';
 import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
-import { apiClient } from '@/lib/api';
+import { apiClient, streamSSE } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
 import type { ConnectConfiguration } from '@/types';
@@ -913,16 +913,36 @@ export function TestYourselfPage() {
 
     try {
       const briefInstructions = buildBriefInstructionsPayload();
+      let generatedContent = '';
 
-      const response = await apiClient.post('/api/testyourself/generate-test', {
+      const generator = streamSSE('/api/testyourself/generate-test', {
         artifact: { content: combinedBriefsContent },
         brief_instructions: briefInstructions,
       });
-      
-      // Handle streaming response
-      if (response.data) {
-        setTestContent(response.data);
-        setMessages([{ role: 'assistant', content: 'Test questions generated successfully!' }]);
+
+      for await (const event of generator) {
+        if (!event?.event) continue;
+
+        if (event.event === 'on_progress_update') {
+          setMessages((prev) => [...prev, { role: 'assistant', content: event.chunk }]);
+        }
+
+        if (event.event === 'on_rewrite_artifact') {
+          generatedContent = event.chunk;
+          setTestContent(event.chunk);
+        }
+      }
+
+      if (generatedContent) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'Test questions generated successfully!' }]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'Test questions generation did not return any content. Please try again.',
+          },
+        ]);
       }
     } catch (error) {
       console.error('Error generating test:', error);
