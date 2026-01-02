@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
@@ -675,6 +675,7 @@ export function ConnectPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const hasRequestedConnectRef = useRef(false);
 
   const availableBriefs = useMemo(
     () => (briefs.length > 0 ? briefs : parseBriefsContent(briefsContent || '')),
@@ -691,7 +692,8 @@ export function ConnectPage() {
       return;
     }
 
-    if (availableBriefs.length > 0 && parsedSources.length > 0 && connectConfiguration) {
+    if (availableBriefs.length > 0 && parsedSources.length > 0 && connectConfiguration && !hasRequestedConnectRef.current) {
+      hasRequestedConnectRef.current = true;
       generateConnect(availableBriefs);
     } else {
       setIsInitializing(false);
