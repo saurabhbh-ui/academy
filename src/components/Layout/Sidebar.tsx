@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 const WORKFLOW_STEPS = [
   { number: 1, label: 'Configuration', path: '/configuration' },
   { number: 2, label: 'Outline', path: '/outline' },
-  { number: 3, label: 'Briefs', path: '/briefs' },
+  { number: 3, label: 'Briefs', path: '/briefs/1' },
   { number: 4, label: 'Connect Config', path: '/connect-configuration' },
   { number: 5, label: 'Connect', path: '/connect' },
   { number: 6, label: 'Test Yourself', path: '/test-yourself' },
