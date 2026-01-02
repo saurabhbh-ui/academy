@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
@@ -13,6 +14,42 @@ import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
 import type { ConnectConfiguration } from '@/types';
 
 let lastTestGenerationSignature: string | null = null;
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type SetMessages = Dispatch<SetStateAction<ChatMessage[]>>;
+
+const toFileSlug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'document';
+
+const addAssistantMessage = (setMessages: SetMessages, content: string) => {
+  setMessages((prev) => [...prev, { role: 'assistant', content }]);
+};
+
+const downloadArtifact = async (
+  content: string,
+  filenamePrefix: string,
+  onSuccess?: () => void
+) => {
+  if (!content) {
+    alert('No content to export');
+    return;
+  }
+
+  try {
+    const blob = await exportArtifact(content);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${toFileSlug(filenamePrefix)}-${Date.now()}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    onSuccess?.();
+  } catch (error) {
+    console.error('Error exporting:', error);
+    alert('Failed to export document. Please try again.');
+  }
+};
 
 // ============================================================================
 // OUTLINE PAGE - Fully Integrated
@@ -28,7 +65,7 @@ export function OutlinePage() {
     setCurrentStage,
   } = useWorkflow();
 
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -115,8 +152,17 @@ export function OutlinePage() {
     }
   };
 
+  const handleRegenerate = async () => {
+    if (!configuration || parsedSources.length === 0) return;
+
+    if (!window.confirm('Regenerate outline? This will discard any manual edits.')) return;
+
+    setMessages([]);
+    await generateOutline();
+  };
+
   const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
-    if (!parsedSources.length || !currentBrief) return;
+    if (!parsedSources.length || !outlineContent) return;
 
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
@@ -147,7 +193,7 @@ export function OutlinePage() {
   };
 
   const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
-    if (!parsedSources.length || !currentBrief) return;
+    if (!parsedSources.length || !outlineContent) return;
 
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
@@ -177,8 +223,10 @@ export function OutlinePage() {
     }
   };
 
-  const handleExport = () => {
-    console.log('Export outline');
+  const handleExport = async () => {
+    await downloadArtifact(outlineContent, 'outline', () =>
+      addAssistantMessage(setMessages, 'Outline exported successfully!')
+    );
   };
 
   const handleImport = () => {
@@ -214,6 +262,7 @@ export function OutlinePage() {
             onChange={setOutlineContent}
             onExport={handleExport}
             onImport={handleImport}
+            onRegenerate={handleRegenerate}
           />
         )
       }
@@ -260,7 +309,7 @@ export function BriefsPage() {
     setCurrentStage,
   } = useWorkflow();
 
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [generatingBriefIndex, setGeneratingBriefIndex] = useState(0);
@@ -421,8 +470,19 @@ export function BriefsPage() {
     }
   };
 
+  const handleRegenerate = async () => {
+    if (!configuration || !outlineContent || parsedSources.length === 0) return;
+
+    if (!window.confirm('Regenerate all briefs? This will overwrite your edits.')) return;
+
+    setMessages([]);
+    setBriefs([]);
+    setBriefsContent('');
+    await generateBriefs();
+  };
+
   const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
-    if (!parsedSources.length) return;
+    if (!parsedSources.length || !currentBrief) return;
 
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
@@ -457,7 +517,7 @@ export function BriefsPage() {
   };
 
   const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
-    if (!parsedSources.length) return;
+    if (!parsedSources.length || !currentBrief) return;
 
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
@@ -491,8 +551,11 @@ export function BriefsPage() {
     }
   };
 
-  const handleExport = () => {
-    console.log('Export briefs');
+  const handleExport = async () => {
+    const briefTitle = currentBrief?.title || `brief-${currentBriefIndex + 1}`;
+    await downloadArtifact(currentBrief?.content || '', briefTitle, () =>
+      addAssistantMessage(setMessages, `${briefTitle} exported successfully!`)
+    );
   };
 
   const handleImport = () => {
@@ -536,6 +599,7 @@ export function BriefsPage() {
             }}
             onExport={handleExport}
             onImport={handleImport}
+            onRegenerate={handleRegenerate}
           />
         ) : (
           <div className="flex items-center justify-center h-full border rounded-lg bg-card">
@@ -674,7 +738,7 @@ export function ConnectPage() {
     setCurrentStage,
   } = useWorkflow();
 
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const hasRequestedConnectRef = useRef(false);
@@ -766,8 +830,19 @@ export function ConnectPage() {
     }
   };
 
-  const handleExport = () => {
-    console.log('Export connect');
+  const handleRegenerate = async () => {
+    if (!connectConfiguration || availableBriefs.length === 0 || parsedSources.length === 0) return;
+    if (!window.confirm('Regenerate connect tutorial? This will discard your edits.')) return;
+
+    setMessages([]);
+    setConnectContent('');
+    await generateConnect(availableBriefs);
+  };
+
+  const handleExport = async () => {
+    await downloadArtifact(connectContent, 'connect', () =>
+      addAssistantMessage(setMessages, 'Connect tutorial exported successfully!')
+    );
   };
 
   const handleImport = () => {
@@ -803,6 +878,7 @@ export function ConnectPage() {
             onChange={setConnectContent}
             onExport={handleExport}
             onImport={handleImport}
+            onRegenerate={handleRegenerate}
           />
         )
       }
@@ -843,7 +919,7 @@ export function TestYourselfPage() {
     setCurrentStage,
   } = useWorkflow();
 
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const combinedBriefsContent = useMemo(
@@ -997,8 +1073,20 @@ export function TestYourselfPage() {
     }
   };
 
-  const handleExport = () => {
-    console.log('Export test');
+  const handleRegenerate = async () => {
+    if (!combinedBriefsContent) return;
+    if (!window.confirm('Regenerate test questions? This will overwrite your edits.')) return;
+
+    setMessages([]);
+    setTestContent('');
+    lastTestGenerationSignature = null;
+    await generateTest();
+  };
+
+  const handleExport = async () => {
+    await downloadArtifact(testContent, 'test-yourself', () =>
+      addAssistantMessage(setMessages, 'Test questions exported successfully!')
+    );
   };
 
   const handleImport = () => {
@@ -1034,6 +1122,7 @@ export function TestYourselfPage() {
             onChange={setTestContent}
             onExport={handleExport}
             onImport={handleImport}
+            onRegenerate={handleRegenerate}
           />
         )
       }
@@ -1072,7 +1161,7 @@ export function ExecutiveSummaryPage() {
     setCurrentStage,
   } = useWorkflow();
 
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1218,30 +1307,9 @@ export function ExecutiveSummaryPage() {
   };
 
   const handleExport = async () => {
-    if (!summaryContent) {
-      alert('No content to export');
-      return;
-    }
-
-    try {
-      const blob = await exportArtifact(summaryContent);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `executive-summary-${Date.now()}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      setMessages((prev) => [...prev, { 
-        role: 'assistant', 
-        content: 'Executive summary exported successfully!' 
-      }]);
-    } catch (error) {
-      console.error('Error exporting:', error);
-      alert('Failed to export document. Please try again.');
-    }
+    await downloadArtifact(summaryContent, 'executive-summary', () =>
+      addAssistantMessage(setMessages, 'Executive summary exported successfully!')
+    );
   };
 
   const handleImport = () => {
@@ -1301,6 +1369,7 @@ export function ExecutiveSummaryPage() {
               onChange={setSummaryContent}
               onExport={handleExport}
               onImport={handleImport}
+              onRegenerate={handleRegenerate}
             />
             <input
               ref={fileInputRef}
