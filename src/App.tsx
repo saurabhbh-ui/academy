@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { InterfaceProvider } from './providers/InterfaceProvider';
 import { WorkflowProvider } from './providers/WorkflowProvider';
 import { MainLayout } from './components/Layout';
@@ -24,7 +24,7 @@ function App() {
               <Route index element={<HomePage />} />
               <Route path="configuration" element={<ConfigurationPage />} />
               <Route path="outline" element={<OutlinePage />} />
-              <Route path="briefs" element={<BriefsPage />} />
+              <Route path="briefs" element={<Navigate to="/briefs/1" replace />} />
               <Route path="briefs/:index" element={<BriefsPage />} />
               <Route path="connect-configuration" element={<ConnectConfigPage />} />
               <Route path="connect" element={<ConnectPage />} />

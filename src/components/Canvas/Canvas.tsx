@@ -1,22 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BlockNoteEditor } from '@blocknote/core';
-import { BlockNoteView } from '@blocknote/mantine';
-import '@blocknote/mantine/style.css';
+import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import { Button } from '@/components/UI';
 import { 
-  Undo2, 
-  Redo2, 
   Bold, 
   Italic, 
-  Underline,
-  FileDown,
-  FileUp,
+  Underline, 
+  List, 
+  ListOrdered,
+  Eye,
   Edit3,
-  Eye
+  Download,
+  Upload,
+  RotateCcw
 } from 'lucide-react';
 
 interface CanvasProps {
-  content?: string;
+  content: string;
   onChange?: (content: string) => void;
   onExport?: () => void;
   onImport?: () => void;
@@ -26,175 +28,260 @@ interface CanvasProps {
 export function Canvas({ 
   content = '', 
   onChange, 
-  onExport,
+  onExport, 
   onImport,
   editable = true 
 }: CanvasProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [localContent, setLocalContent] = useState(content);
 
-  const editor = useMemo(() => {
-    return BlockNoteEditor.create();
-  }, []);
+  // Update local content when prop changes
+  if (content !== localContent && !isEditing) {
+    setLocalContent(content);
+  }
 
-  useEffect(() => {
-    // Update editor when content changes externally
-    if (content) {
-      (async () => {
-        try {
-          // Use BlockNote's built-in markdown parser
-          const blocks = await editor.tryParseMarkdownToBlocks(content);
-          editor.replaceBlocks(editor.document, blocks);
-        } catch (error) {
-          console.error('Error parsing content:', error);
-        }
-      })();
-    }
-  }, [content, editor]);
-
-  const handleEditorChange = async () => {
+  const handleChange = (newContent: string) => {
+    setLocalContent(newContent);
     if (onChange) {
-      try {
-        // Convert blocks back to markdown
-        const markdown = await editor.blocksToMarkdownLossy(editor.document);
-        onChange(markdown);
-      } catch (error) {
-        console.error('Error converting to markdown:', error);
+      onChange(newContent);
+    }
+  };
+
+  const insertMarkdown = (before: string, after: string = '') => {
+    const textarea = document.getElementById('markdown-editor') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = localContent.substring(start, end);
+    const newText = localContent.substring(0, start) + before + selectedText + after + localContent.substring(end);
+    
+    handleChange(newText);
+    
+    // Set cursor position after insertion
+    setTimeout(() => {
+      textarea.focus();
+      const newPosition = start + before.length + selectedText.length + after.length;
+      textarea.setSelectionRange(newPosition, newPosition);
+    }, 0);
+  };
+
+  const handleBold = () => insertMarkdown('**', '**');
+  const handleItalic = () => insertMarkdown('*', '*');
+  const handleUnderline = () => insertMarkdown('<u>', '</u>');
+  const handleBulletList = () => {
+    const textarea = document.getElementById('markdown-editor') as HTMLTextAreaElement;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = localContent.lastIndexOf('\n', start - 1) + 1;
+    const newText = localContent.substring(0, lineStart) + '- ' + localContent.substring(lineStart);
+    handleChange(newText);
+  };
+  const handleNumberedList = () => {
+    const textarea = document.getElementById('markdown-editor') as HTMLTextAreaElement;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const lineStart = localContent.lastIndexOf('\n', start - 1) + 1;
+    const newText = localContent.substring(0, lineStart) + '1. ' + localContent.substring(lineStart);
+    handleChange(newText);
+  };
+
+  const handleRegenerate = () => {
+    if (window.confirm('Are you sure you want to regenerate? This will discard current changes.')) {
+      // Trigger regeneration - this should be handled by parent component
+      if (onChange) {
+        onChange(''); // Clear content to trigger regeneration
       }
     }
   };
 
-  const handleUndo = () => {
-    editor.undo();
-  };
-
-  const handleRedo = () => {
-    editor.redo();
-  };
-
-  const toggleBold = () => {
-    editor.toggleStyles({ bold: true });
-  };
-
-  const toggleItalic = () => {
-    editor.toggleStyles({ italic: true });
-  };
-
-  const toggleUnderline = () => {
-    editor.toggleStyles({ underline: true });
-  };
-
   return (
-    <div className="flex flex-col h-full border rounded-lg bg-card">
+    <div className="flex flex-col h-full border rounded-lg bg-card overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b px-4 py-2 bg-muted/40">
-        <div className="flex items-center gap-1">
-          {/* Undo/Redo */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleUndo}
-            title="Undo"
-            className="h-8 w-8 p-0"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRedo}
-            title="Redo"
-            className="h-8 w-8 p-0"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
+        <div className="flex items-center gap-2">
+          {/* View/Edit Toggle */}
+          {editable && (
+            <div className="flex items-center gap-1 mr-4 bg-background rounded-md p-1">
+              <Button
+                variant={!isEditing ? "primary" : "ghost"}
+                size="sm"
+                onClick={() => setIsEditing(false)}
+                className="h-8 px-3"
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                View
+              </Button>
+              <Button
+                variant={isEditing ? "primary" : "ghost"}
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                className="h-8 px-3"
+              >
+                <Edit3 className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            </div>
+          )}
 
-          <div className="w-px h-6 bg-border mx-1" />
+          {/* Formatting buttons - only show in edit mode */}
+          {isEditing && editable && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBold}
+                title="Bold (Ctrl+B)"
+                className="h-8 w-8 p-0"
+              >
+                <Bold className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleItalic}
+                title="Italic (Ctrl+I)"
+                className="h-8 w-8 p-0"
+              >
+                <Italic className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleUnderline}
+                title="Underline (Ctrl+U)"
+                className="h-8 w-8 p-0"
+              >
+                <Underline className="h-4 w-4" />
+              </Button>
 
-          {/* Text Formatting */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleBold}
-            title="Bold"
-            className="h-8 w-8 p-0"
-          >
-            <Bold className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleItalic}
-            title="Italic"
-            className="h-8 w-8 p-0"
-          >
-            <Italic className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleUnderline}
-            title="Underline"
-            className="h-8 w-8 p-0"
-          >
-            <Underline className="h-4 w-4" />
-          </Button>
+              <div className="w-px h-6 bg-border mx-1" />
 
-          <div className="w-px h-6 bg-border mx-1" />
-
-          {/* Import/Export */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onImport}
-            title="Import from Word"
-            className="h-8 px-3"
-          >
-            <FileUp className="h-4 w-4 mr-1" />
-            Import
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onExport}
-            title="Export to Word"
-            className="h-8 px-3"
-          >
-            <FileDown className="h-4 w-4 mr-1" />
-            Export
-          </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBulletList}
+                title="Bullet List"
+                className="h-8 w-8 p-0"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleNumberedList}
+                title="Numbered List"
+                className="h-8 w-8 p-0"
+              >
+                <ListOrdered className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
 
-        {/* Edit/View Toggle */}
-        {editable && (
+        <div className="flex items-center gap-2">
+          {onImport && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onImport}
+              title="Import from Word"
+              className="h-8 px-3"
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Import
+            </Button>
+          )}
+          {onExport && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onExport}
+              title="Export to Word"
+              className="h-8 px-3"
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Export
+            </Button>
+          )}
           <Button
-            variant={isEditing ? 'secondary' : 'ghost'}
+            variant="ghost"
             size="sm"
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={handleRegenerate}
+            title="Regenerate"
             className="h-8 px-3"
           >
-            {isEditing ? (
-              <>
-                <Eye className="h-4 w-4 mr-1" />
-                View Mode
-              </>
-            ) : (
-              <>
-                <Edit3 className="h-4 w-4 mr-1" />
-                Edit Mode
-              </>
-            )}
+            <RotateCcw className="h-4 w-4 mr-1" />
+            Re-generate
           </Button>
-        )}
+        </div>
       </div>
 
-      {/* Editor */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <BlockNoteView
-          editor={editor}
-          onChange={handleEditorChange}
-          editable={editable && isEditing}
-          theme="light"
-        />
+      {/* Editor/Preview Area */}
+      <div className="flex-1 overflow-y-auto">
+        {isEditing && editable ? (
+          /* Edit Mode - Textarea */
+          <textarea
+            id="markdown-editor"
+            value={localContent}
+            onChange={(e) => handleChange(e.target.value)}
+            className="w-full h-full p-6 font-mono text-sm resize-none focus:outline-none bg-background"
+            placeholder="Start typing... Use markdown formatting:
+
+**bold** for bold text
+*italic* for italic text
+# Heading 1
+## Heading 2
+- Bullet list
+1. Numbered list"
+            spellCheck={true}
+          />
+        ) : (
+          /* View Mode - React Markdown */
+          <div className="prose prose-sm max-w-none p-6 bg-background">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw, rehypeSanitize]}
+              components={{
+                // Custom styling for markdown elements
+                h1: ({node, ...props}) => <h1 className="text-3xl font-bold mt-6 mb-4" {...props} />,
+                h2: ({node, ...props}) => <h2 className="text-2xl font-bold mt-5 mb-3" {...props} />,
+                h3: ({node, ...props}) => <h3 className="text-xl font-bold mt-4 mb-2" {...props} />,
+                p: ({node, ...props}) => <p className="mb-4 leading-7" {...props} />,
+                ul: ({node, ...props}) => <ul className="list-disc ml-6 mb-4 space-y-2" {...props} />,
+                ol: ({node, ...props}) => <ol className="list-decimal ml-6 mb-4 space-y-2" {...props} />,
+                li: ({node, ...props}) => <li className="leading-7" {...props} />,
+                strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                em: ({node, ...props}) => <em className="italic" {...props} />,
+                code: ({node, ...props}) => (
+                  <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props} />
+                ),
+                pre: ({node, ...props}) => (
+                  <pre className="bg-muted p-4 rounded-lg overflow-x-auto mb-4" {...props} />
+                ),
+                blockquote: ({node, ...props}) => (
+                  <blockquote className="border-l-4 border-primary pl-4 italic my-4" {...props} />
+                ),
+                a: ({node, ...props}) => (
+                  <a className="text-primary hover:underline" {...props} />
+                ),
+                table: ({node, ...props}) => (
+                  <div className="overflow-x-auto mb-4">
+                    <table className="min-w-full divide-y divide-border" {...props} />
+                  </div>
+                ),
+                th: ({node, ...props}) => (
+                  <th className="px-4 py-2 bg-muted font-semibold text-left" {...props} />
+                ),
+                td: ({node, ...props}) => (
+                  <td className="px-4 py-2 border-t border-border" {...props} />
+                ),
+              }}
+            >
+              {localContent || '*No content yet. Click Edit to start writing.*'}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
@@ -9,6 +9,7 @@ import { useWorkflow } from '@/providers/WorkflowProvider';
 import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
 import { apiClient } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
+import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
 
 // ============================================================================
 // OUTLINE PAGE - Fully Integrated
@@ -112,7 +113,7 @@ export function OutlinePage() {
   };
 
   const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
-    if (!parsedSources.length) return;
+    if (!parsedSources.length || !currentBrief) return;
 
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
@@ -143,7 +144,7 @@ export function OutlinePage() {
   };
 
   const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
-    if (!parsedSources.length) return;
+    if (!parsedSources.length || !currentBrief) return;
 
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
@@ -228,7 +229,7 @@ export function OutlinePage() {
           <Button variant="outline" onClick={() => navigate('/configuration')}>
             ← Back to Configuration
           </Button>
-          <Button onClick={() => navigate('/briefs')} disabled={!outlineContent || isInitializing}>
+          <Button onClick={() => navigate('/briefs/1')} disabled={!outlineContent || isInitializing}>
             Continue to Briefs →
           </Button>
         </div>
@@ -243,14 +244,15 @@ export function OutlinePage() {
 export function BriefsPage() {
   const navigate = useNavigate();
   const { index } = useParams<{ index?: string }>();
-  const currentBriefIndex = index ? parseInt(index) - 1 : 0; // URL is 1-indexed, array is 0-indexed
   
   const {
     parsedSources,
     configuration,
     outlineContent,
     briefsContent,
+    briefs,
     setBriefsContent,
+    setBriefs,
     setIsGenerating,
     setCurrentStage,
   } = useWorkflow();
@@ -260,67 +262,46 @@ export function BriefsPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [generatingBriefIndex, setGeneratingBriefIndex] = useState(0);
   const [totalBriefs, setTotalBriefs] = useState(0);
-  const [briefsList, setBriefsList] = useState<Array<{ id: string; title: string; content: string }>>([]);
 
-  // Parse briefs from content
-  const parseBriefs = (content: string) => {
-    const briefRegex = /## Brief (\d+):/g;
-    const matches = [...content.matchAll(briefRegex)];
-    
-    if (matches.length === 0) {
-      return [{ id: 'brief-1', title: 'Brief', content }];
-    }
+  const currentBriefIndex = useMemo(() => {
+    if (!index) return 0;
+    const numericIndex = Number(index);
+    return Number.isNaN(numericIndex) ? 0 : numericIndex - 1;
+  }, [index]);
 
-    const briefs: Array<{ id: string; title: string; content: string }> = [];
-    
-    for (let i = 0; i < matches.length; i++) {
-      const match = matches[i];
-      const briefNumber = match[1];
-      const startIndex = match.index! + match[0].length;
-      const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
-      const briefContent = content.substring(startIndex, endIndex).trim();
-      
-      briefs.push({
-        id: `brief-${briefNumber}`,
-        title: `Brief ${briefNumber}`,
-        content: `## Brief ${briefNumber}:\n\n${briefContent}`,
-      });
-    }
-
-    return briefs;
-  };
+  const currentBrief = briefs[currentBriefIndex];
 
   useEffect(() => {
     setCurrentStage('brief');
-    
-    // Auto-redirect to /briefs/1 if at /briefs without index
-    if (!index && briefsContent) {
-      navigate('/briefs/1', { replace: true });
-      return;
-    }
     
     if (!briefsContent && outlineContent && parsedSources.length > 0 && configuration) {
       generateBriefs();
     } else {
       setIsInitializing(false);
-      if (briefsContent) {
-        setBriefsList(parseBriefs(briefsContent));
+      if (briefsContent && briefs.length === 0) {
+        setBriefs(parseBriefsContent(briefsContent));
       }
     }
   }, []);
 
   useEffect(() => {
-    if (briefsContent) {
-      const parsed = parseBriefs(briefsContent);
-      console.log('Parsed briefs:', parsed.length, 'Current index:', currentBriefIndex);
-      setBriefsList(parsed);
-      
-      // If we have briefs but no index in URL, redirect to first brief
-      if (!index && parsed.length > 0) {
-        navigate('/briefs/1', { replace: true });
-      }
+    if (briefsContent && briefs.length === 0) {
+      setBriefs(parseBriefsContent(briefsContent));
     }
-  }, [briefsContent]);
+  }, [briefsContent, briefs.length, setBriefs]);
+
+  useEffect(() => {
+    if (briefs.length === 0) return;
+
+    if (!index || Number.isNaN(Number(index)) || currentBriefIndex < 0) {
+      navigate('/briefs/1', { replace: true });
+      return;
+    }
+
+    if (currentBriefIndex >= briefs.length) {
+      navigate(`/briefs/${briefs.length}`, { replace: true });
+    }
+  }, [briefs.length, currentBriefIndex, index, navigate]);
 
   const generateBriefs = async () => {
     if (!configuration || !outlineContent || parsedSources.length === 0) {
@@ -352,7 +333,7 @@ export function BriefsPage() {
       setTotalBriefs(briefInstructions.length);
 
       // Step 2: Generate each brief
-      let allBriefs = '';
+      const generatedBriefs = [];
       for (let i = 0; i < briefInstructions.length; i++) {
         setGeneratingBriefIndex(i + 1);
         
@@ -361,10 +342,23 @@ export function BriefsPage() {
           brief_instructions: briefInstructions[i],
         });
 
-        allBriefs += response.data.content + '\n\n---\n\n';
-        setBriefsContent(allBriefs);
+        const title =
+          briefInstructions[i]?.title ||
+          briefInstructions[i]?.sectionTitle ||
+          `Brief ${i + 1}`;
+
+        generatedBriefs.push({
+          id: `brief-${i + 1}`,
+          title,
+          content: response.data.content,
+        });
+
+        setBriefs([...generatedBriefs]);
+        setBriefsContent(combineBriefsContent(generatedBriefs));
       }
 
+      setBriefs(generatedBriefs);
+      setBriefsContent(combineBriefsContent(generatedBriefs));
       setMessages([{ role: 'assistant', content: `Successfully generated ${briefInstructions.length} briefs!` }]);
       
       // Navigate to first brief after generation
@@ -380,18 +374,18 @@ export function BriefsPage() {
   };
 
   const handleSendMessage = async (message: string) => {
-    if (!parsedSources.length || !configuration) return;
+    if (!parsedSources.length || !configuration || !currentBrief) return;
 
     setMessages((prev) => [...prev, { role: 'user', content: message }]);
     setIsLoading(true);
 
     try {
       let response = '';
-      let updatedArtifact = briefsContent;
+      let updatedArtifact = currentBrief.content;
       
       const generator = chatCompletion({
         messages: [...messages, { role: 'user', content: message }],
-        artifact: briefsContent,
+        artifact: currentBrief.content,
         source: parsedSources,
         stage: 'brief',
         config: {
@@ -409,7 +403,13 @@ export function BriefsPage() {
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== briefsContent) setBriefsContent(updatedArtifact);
+      if (updatedArtifact !== currentBrief.content) {
+        const updatedBriefs = briefs.map((brief, i) =>
+          i === currentBriefIndex ? { ...brief, content: updatedArtifact } : brief
+        );
+        setBriefs(updatedBriefs);
+        setBriefsContent(combineBriefsContent(updatedBriefs));
+      }
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
@@ -429,7 +429,7 @@ export function BriefsPage() {
       const generator = adjustLevel({
         newLevel: level,
         messages,
-        artifact: briefsContent,
+        artifact: currentBrief.content,
         source: parsedSources,
       });
 
@@ -438,7 +438,11 @@ export function BriefsPage() {
       }
 
       if (newContent) {
-        setBriefsContent(newContent);
+        const updatedBriefs = briefs.map((brief, i) =>
+          i === currentBriefIndex ? { ...brief, content: newContent } : brief
+        );
+        setBriefs(updatedBriefs);
+        setBriefsContent(combineBriefsContent(updatedBriefs));
         setMessages((prev) => [...prev, { role: 'assistant', content: `Content adjusted to ${level} level.` }]);
       }
     } catch (error) {
@@ -460,7 +464,7 @@ export function BriefsPage() {
       const generator = adjustLength({
         newLength: length,
         messages,
-        artifact: briefsContent,
+        artifact: currentBrief.content,
         source: parsedSources,
       });
 
@@ -469,7 +473,11 @@ export function BriefsPage() {
       }
 
       if (newContent) {
-        setBriefsContent(newContent);
+        const updatedBriefs = briefs.map((brief, i) =>
+          i === currentBriefIndex ? { ...brief, content: newContent } : brief
+        );
+        setBriefs(updatedBriefs);
+        setBriefsContent(combineBriefsContent(updatedBriefs));
         setMessages((prev) => [...prev, { role: 'assistant', content: `Content made ${length}.` }]);
       }
     } catch (error) {
@@ -500,7 +508,7 @@ export function BriefsPage() {
 
   return (
     <WorkflowLayout
-      title={briefsList.length > 0 && briefsList[currentBriefIndex] ? briefsList[currentBriefIndex].title : "Briefs"}
+      title={currentBrief ? currentBrief.title : "Briefs"}
       description="Review and refine the detailed content briefs"
       canvas={
         isInitializing ? (
@@ -513,16 +521,15 @@ export function BriefsPage() {
               </p>
             </div>
           </div>
-        ) : briefsList.length > 0 && briefsList[currentBriefIndex] ? (
+        ) : currentBrief ? (
           <Canvas
-            content={briefsList[currentBriefIndex].content}
+            content={currentBrief.content}
             onChange={(newContent) => {
-              // Update specific brief in the full content
-              const updatedBriefs = briefsList.map((b, i) =>
+              const updatedBriefs = briefs.map((b, i) =>
                 i === currentBriefIndex ? { ...b, content: newContent } : b
               );
-              const fullContent = updatedBriefs.map((b) => b.content).join('\n\n---\n\n');
-              setBriefsContent(fullContent);
+              setBriefs(updatedBriefs);
+              setBriefsContent(combineBriefsContent(updatedBriefs));
             }}
             onExport={handleExport}
             onImport={handleImport}
@@ -556,15 +563,15 @@ export function BriefsPage() {
           )}
           
           <div className="text-sm text-muted-foreground">
-            {briefsList.length > 0 && `Brief ${currentBriefIndex + 1} of ${briefsList.length}`}
+            {briefs.length > 0 && `Brief ${currentBriefIndex + 1} of ${briefs.length}`}
           </div>
           
-          {currentBriefIndex < briefsList.length - 1 ? (
+          {currentBriefIndex < briefs.length - 1 ? (
             <Button onClick={() => navigate(`/briefs/${currentBriefIndex + 2}`)}>
               Next Brief →
             </Button>
           ) : (
-            <Button onClick={() => navigate('/connect-configuration')} disabled={!briefsContent}>
+            <Button onClick={() => navigate('/connect-configuration')} disabled={!briefs.length}>
               Continue to Connect Config →
             </Button>
           )}
@@ -601,6 +608,7 @@ export function ConnectPage() {
   const navigate = useNavigate();
   const {
     parsedSources,
+    briefs,
     briefsContent,
     connectConfiguration,
     connectContent,
@@ -613,17 +621,30 @@ export function ConnectPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  const availableBriefs = useMemo(
+    () => (briefs.length > 0 ? briefs : parseBriefsContent(briefsContent || '')),
+    [briefs, briefsContent]
+  );
+
   useEffect(() => {
     setCurrentStage('connect');
-    if (!connectContent && briefsContent && parsedSources.length > 0 && connectConfiguration) {
-      generateConnect();
+  }, [setCurrentStage]);
+
+  useEffect(() => {
+    if (connectContent) {
+      setIsInitializing(false);
+      return;
+    }
+
+    if (availableBriefs.length > 0 && parsedSources.length > 0 && connectConfiguration) {
+      generateConnect(availableBriefs);
     } else {
       setIsInitializing(false);
     }
-  }, []);
+  }, [availableBriefs, connectConfiguration, connectContent, parsedSources.length]);
 
-  const generateConnect = async () => {
-    if (!connectConfiguration || !briefsContent || parsedSources.length === 0) {
+  const generateConnect = async (briefList: typeof availableBriefs = availableBriefs) => {
+    if (!connectConfiguration || briefList.length === 0 || parsedSources.length === 0) {
       console.error('Missing connect configuration, briefs, or sources');
       setIsInitializing(false);
       return;
@@ -635,16 +656,31 @@ export function ConnectPage() {
 
     try {
       const response = await apiClient.post('/api/connect/generate-connect', {
-        source: parsedSources,
-        brief_artifact: { content: briefsContent },
-        character_roles: connectConfiguration.characterRoles || [],
-        artefacts: connectConfiguration.artefacts || [],
-        task_types: connectConfiguration.taskTypes || [],
-        question_types: connectConfiguration.questionTypes || [],
+        briefs: briefList.map(brief => ({ content: brief.content })),
+        parsedOutline: {
+          briefs: briefList.map((brief, index) => ({
+            brief_number: index + 1,
+            topic: brief.title || `Brief ${index + 1}`,
+            pages: [],
+          })),
+        },
+        config: {
+          role: connectConfiguration.learnerProfileRole,
+          department: connectConfiguration.learnerProfileDepartment,
+          countryType: connectConfiguration.scenarioDetailsCountryType,
+          authorityType: connectConfiguration.scenarioDetailsAuthorityType,
+          financialInstitution: connectConfiguration.scenarioDetailsFinancialInstitutionsType,
+          artefacts: connectConfiguration.artefacts,
+          characters: connectConfiguration.characterRoles,
+          keypoints: connectConfiguration.taskTypes,
+          taskExamples: connectConfiguration.taskExamples,
+          questions: connectConfiguration.questionTypes,
+          scenarioDescription: connectConfiguration.scenarioDescriptions,
+        },
       });
 
       setConnectContent(response.data.content);
-      setMessages([{ role: 'assistant', content: response.data.response.content }]);
+      setMessages([{ role: 'assistant', content: response.data.response?.content || 'Connect generated successfully!' }]);
     } catch (error) {
       console.error('Error generating connect:', error);
       setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the connect tutorial.' }]);
@@ -695,7 +731,7 @@ export function ConnectPage() {
     console.log('Import connect');
   };
 
-  if (!parsedSources.length || !briefsContent || !connectConfiguration) {
+  if (!parsedSources.length || availableBriefs.length === 0 || !connectConfiguration) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
@@ -756,6 +792,7 @@ export function TestYourselfPage() {
   const navigate = useNavigate();
   const {
     parsedSources,
+    briefs,
     briefsContent,
     testContent,
     setTestContent,
@@ -766,18 +803,22 @@ export function TestYourselfPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const combinedBriefsContent = useMemo(
+    () => (briefs.length > 0 ? combineBriefsContent(briefs) : briefsContent),
+    [briefs, briefsContent]
+  );
 
   useEffect(() => {
     setCurrentStage('test_yourself');
-    if (!testContent && briefsContent) {
+    if (!testContent && combinedBriefsContent) {
       generateTest();
     } else {
       setIsInitializing(false);
     }
-  }, []);
+  }, [combinedBriefsContent, testContent]);
 
   const generateTest = async () => {
-    if (!briefsContent) {
+    if (!combinedBriefsContent) {
       console.error('Missing briefs content');
       setIsInitializing(false);
       return;
@@ -792,11 +833,11 @@ export function TestYourselfPage() {
       const briefInstructions = {
         title: 'Test Questions',
         learning_objectives: [],
-        summary: briefsContent,
+        summary: combinedBriefsContent,
       };
 
       const generator = apiClient.post('/api/testyourself/generate-test', {
-        artifact: { content: briefsContent },
+        artifact: { content: combinedBriefsContent },
         brief_instructions: briefInstructions,
       });
 
@@ -857,12 +898,12 @@ export function TestYourselfPage() {
     console.log('Import test');
   };
 
-  if (!briefsContent) {
+  if (!combinedBriefsContent) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
         <p className="text-muted-foreground mb-4">Please complete the briefs step first.</p>
-        <Button onClick={() => navigate('/briefs')}>Go to Briefs</Button>
+        <Button onClick={() => navigate('/briefs/1')}>Go to Briefs</Button>
       </div>
     );
   }
