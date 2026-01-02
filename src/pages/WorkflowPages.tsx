@@ -10,6 +10,7 @@ import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
 import { apiClient } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
+import type { ConnectConfiguration } from '@/types';
 
 // ============================================================================
 // OUTLINE PAGE - Fully Integrated
@@ -601,6 +602,60 @@ export function ConnectConfigPage() {
   );
 }
 
+const extractBriefSection = (content: string, label: string) => {
+  const regex = new RegExp(`\\*\\*${label}\\*\\*:?\\s*([\\s\\S]*?)(?=\\n\\*\\*|$)`, 'i');
+  const match = content.match(regex);
+  return match ? match[1].trim() : '';
+};
+
+const mapBriefToParsedOutline = (brief: { title: string; content: string }, index: number) => {
+  const headingMatch = brief.content.match(/^##\s*Brief\s+\d+:\s*(.*)$/im);
+  const headingTitle = headingMatch?.[1]?.trim();
+
+  return {
+    title: headingTitle || brief.title || `Brief ${index + 1}`,
+    objectives: extractBriefSection(brief.content, 'Objectives'),
+    overview: extractBriefSection(brief.content, 'Overview'),
+    content: extractBriefSection(brief.content, 'Content') || brief.content,
+  };
+};
+
+const mapQuestionTypes = (questionTypes?: string[]) => {
+  if (!questionTypes || questionTypes.length === 0) return undefined;
+
+  const mapping: Record<string, 'Fill-in-the-Blank' | 'Multiple Choice Question' | 'True/False' | 'Yes/No'> = {
+    'fill-in-the-blank': 'Fill-in-the-Blank',
+    mcq: 'Multiple Choice Question',
+    'true-false': 'True/False',
+    'yes-no': 'Yes/No',
+  };
+
+  const mapped = questionTypes
+    .map(type => mapping[type])
+    .filter((value): value is 'Fill-in-the-Blank' | 'Multiple Choice Question' | 'True/False' | 'Yes/No' => Boolean(value));
+
+  return mapped.length ? mapped : undefined;
+};
+
+const buildConnectConfigPayload = (connectConfiguration: ConnectConfiguration) => {
+  const stringOrUndefined = (value?: string) => value?.trim() || undefined;
+  const arrayOrUndefined = (value?: string[]) => (value && value.length > 0 ? value : undefined);
+
+  return {
+    role: stringOrUndefined(connectConfiguration.learnerProfileRole),
+    department: stringOrUndefined(connectConfiguration.learnerProfileDepartment),
+    countryType: arrayOrUndefined(connectConfiguration.scenarioDetailsCountryType),
+    authorityType: arrayOrUndefined(connectConfiguration.scenarioDetailsAuthorityType),
+    financialInstitution: arrayOrUndefined(connectConfiguration.scenarioDetailsFinancialInstitutionsType),
+    artefacts: arrayOrUndefined(connectConfiguration.artefacts),
+    characters: arrayOrUndefined(connectConfiguration.characterRoles),
+    scenarioDescription: stringOrUndefined(connectConfiguration.scenarioDescriptions),
+    keypoints: arrayOrUndefined(connectConfiguration.taskTypes),
+    taskExamples: stringOrUndefined(connectConfiguration.taskExamples),
+    questions: mapQuestionTypes(connectConfiguration.questionTypes),
+  };
+};
+
 // ============================================================================
 // CONNECT PAGE - Fully Integrated
 // ============================================================================
@@ -658,25 +713,9 @@ export function ConnectPage() {
       const response = await apiClient.post('/api/connect/generate-connect', {
         briefs: briefList.map(brief => ({ content: brief.content })),
         parsedOutline: {
-          briefs: briefList.map((brief, index) => ({
-            brief_number: index + 1,
-            topic: brief.title || `Brief ${index + 1}`,
-            pages: [],
-          })),
+          briefs: briefList.map((brief, index) => mapBriefToParsedOutline(brief, index)),
         },
-        config: {
-          role: connectConfiguration.learnerProfileRole,
-          department: connectConfiguration.learnerProfileDepartment,
-          countryType: connectConfiguration.scenarioDetailsCountryType,
-          authorityType: connectConfiguration.scenarioDetailsAuthorityType,
-          financialInstitution: connectConfiguration.scenarioDetailsFinancialInstitutionsType,
-          artefacts: connectConfiguration.artefacts,
-          characters: connectConfiguration.characterRoles,
-          keypoints: connectConfiguration.taskTypes,
-          taskExamples: connectConfiguration.taskExamples,
-          questions: connectConfiguration.questionTypes,
-          scenarioDescription: connectConfiguration.scenarioDescriptions,
-        },
+        config: buildConnectConfigPayload(connectConfiguration),
       });
 
       setConnectContent(response.data.content);
