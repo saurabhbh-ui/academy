@@ -50,6 +50,12 @@ export interface ConnectConfiguration {
   questionTypes: string[];
 }
 
+export interface Brief {
+  id: string;
+  title: string;
+  content: string;
+}
+
 export type WorkflowType = 'full_tutorial' | 'executive_summary';
 
 export type WorkflowStep =

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { SourceDocument, Configuration, ConnectConfiguration } from '@/types';
+import type { SourceDocument, Configuration, ConnectConfiguration, Brief } from '@/types';
 
 interface WorkflowState {
   // Configuration
@@ -12,6 +12,7 @@ interface WorkflowState {
   // Content
   outlineContent: string;
   briefsContent: string;
+  briefs: Brief[];
   connectContent: string;
   testContent: string;
   summaryContent: string;
@@ -28,6 +29,7 @@ interface WorkflowContextType extends WorkflowState {
   setConnectConfiguration: (config: ConnectConfiguration) => void;
   setOutlineContent: (content: string) => void;
   setBriefsContent: (content: string) => void;
+  setBriefs: (briefs: Brief[]) => void;
   setConnectContent: (content: string) => void;
   setTestContent: (content: string) => void;
   setSummaryContent: (content: string) => void;
@@ -45,6 +47,7 @@ const initialState: WorkflowState = {
   connectConfiguration: null,
   outlineContent: '',
   briefsContent: '',
+  briefs: [],
   connectContent: '',
   testContent: '',
   summaryContent: '',
@@ -77,6 +80,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   const setBriefsContent = useCallback((content: string) => {
     setState((prev) => ({ ...prev, briefsContent: content }));
+  }, []);
+
+  const setBriefs = useCallback((briefs: Brief[]) => {
+    setState((prev) => ({ ...prev, briefs }));
   }, []);
 
   const setConnectContent = useCallback((content: string) => {
@@ -113,6 +120,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         setConnectConfiguration,
         setOutlineContent,
         setBriefsContent,
+        setBriefs,
         setConnectContent,
         setTestContent,
         setSummaryContent,
