@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import type React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
@@ -6,7 +7,7 @@ import { ChatPanel } from '@/components/Chat';
 import { Button } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
 import { useWorkflow } from '@/providers/WorkflowProvider';
-import { chatCompletion, adjustLength, adjustLevel } from '@/lib/apiService';
+import { chatCompletion, adjustLength, adjustLevel, exportArtifact, importArtifact } from '@/lib/apiService';
 import { apiClient, streamSSE } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
@@ -1075,6 +1076,7 @@ export function ExecutiveSummaryPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setCurrentStage('exsum');
@@ -1146,11 +1148,64 @@ export function ExecutiveSummaryPage() {
   };
 
   const handleExport = () => {
-    console.log('Export summary');
+    if (!summaryContent) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'No executive summary available to export yet.' },
+      ]);
+      return;
+    }
+
+    exportArtifact(summaryContent)
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'executive-summary.docx';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'Executive summary exported successfully.' },
+        ]);
+      })
+      .catch((error) => {
+        console.error('Error exporting summary:', error);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'Sorry, there was an error exporting the executive summary.' },
+        ]);
+      });
   };
 
   const handleImport = () => {
-    console.log('Import summary');
+    importInputRef.current?.click();
+  };
+
+  const handleImportFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await importArtifact(file);
+      setSummaryContent(result.content);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Executive summary imported successfully.' },
+      ]);
+    } catch (error) {
+      console.error('Error importing summary:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, there was an error importing the executive summary.' },
+      ]);
+    } finally {
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
+    }
   };
 
   if (!parsedSources.length) {
@@ -1164,46 +1219,55 @@ export function ExecutiveSummaryPage() {
   }
 
   return (
-    <WorkflowLayout
-      title="Executive Summary"
-      description="High-level overview of the content"
-      canvas={
-        isInitializing ? (
-          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
-            <div className="text-center">
-              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
-              <p className="text-lg font-medium">Generating executive summary...</p>
-              <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+    <>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".doc,.docx,.md,.txt"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
+      <WorkflowLayout
+        title="Executive Summary"
+        description="High-level overview of the content"
+        canvas={
+          isInitializing ? (
+            <div className="flex items-center justify-center h-full border rounded-lg bg-card">
+              <div className="text-center">
+                <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+                <p className="text-lg font-medium">Generating executive summary...</p>
+                <p className="text-sm text-muted-foreground mt-2">This may take a moment</p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <Canvas
-            content={summaryContent}
-            onChange={setSummaryContent}
-            onExport={handleExport}
-            onImport={handleImport}
+          ) : (
+            <Canvas
+              content={summaryContent}
+              onChange={setSummaryContent}
+              onExport={handleExport}
+              onImport={handleImport}
+            />
+          )
+        }
+        chat={
+          <ChatPanel
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            placeholder="Ask AI to refine the summary..."
+            isLoading={isLoading}
           />
-        )
-      }
-      chat={
-        <ChatPanel
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          placeholder="Ask AI to refine the summary..."
-          isLoading={isLoading}
-        />
-      }
-      actions={
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={() => navigate('/test-yourself')}>
-            ← Back to Test Yourself
-          </Button>
-          <Button onClick={() => navigate('/reviewer')} disabled={!summaryContent || isInitializing}>
-            Continue to Reviewer →
-          </Button>
-        </div>
-      }
-    />
+        }
+        actions={
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => navigate('/test-yourself')}>
+              ← Back to Test Yourself
+            </Button>
+            <Button onClick={() => navigate('/reviewer')} disabled={!summaryContent || isInitializing}>
+              Continue to Reviewer →
+            </Button>
+          </div>
+        }
+      />
+    </>
   );
 }
 
