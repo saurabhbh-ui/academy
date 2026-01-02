@@ -22,6 +22,7 @@ interface CanvasProps {
   onChange?: (content: string) => void;
   onExport?: () => void;
   onImport?: () => void;
+  onRegenerate?: () => void;
   editable?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function Canvas({
   onChange, 
   onExport, 
   onImport,
+  onRegenerate,
   editable = true 
 }: CanvasProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -86,11 +88,15 @@ export function Canvas({
     handleChange(newText);
   };
 
-  const handleRegenerate = () => {
-    if (window.confirm('Are you sure you want to regenerate? This will discard current changes.')) {
-      // Trigger regeneration - this should be handled by parent component
-      if (onChange) {
-        onChange(''); // Clear content to trigger regeneration
+  const handleRegenerateClick = () => {
+    // Use the callback if provided, otherwise show confirmation and clear
+    if (onRegenerate) {
+      onRegenerate();
+    } else {
+      if (window.confirm('Are you sure you want to regenerate? This will discard current changes.')) {
+        if (onChange) {
+          onChange(''); // Clear content to trigger regeneration
+        }
       }
     }
   };
@@ -207,7 +213,7 @@ export function Canvas({
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleRegenerate}
+            onClick={handleRegenerateClick}
             title="Regenerate"
             className="h-8 px-3"
           >
