@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { SyntheticEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -17,6 +18,12 @@ import {
   RotateCcw
 } from 'lucide-react';
 
+export interface SelectionInfo {
+  start: number;
+  end: number;
+  text: string;
+}
+
 interface CanvasProps {
   content: string;
   onChange?: (content: string) => void;
@@ -24,6 +31,7 @@ interface CanvasProps {
   onImport?: () => void;
   onRegenerate?: () => void;
   editable?: boolean;
+  onInlineEdit?: (selection: SelectionInfo, query: string) => Promise<void> | void;
 }
 
 export function Canvas({ 
@@ -32,15 +40,22 @@ export function Canvas({
   onExport, 
   onImport,
   onRegenerate,
-  editable = true 
+  editable = true,
+  onInlineEdit,
 }: CanvasProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(content);
+  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [inlineEditQuery, setInlineEditQuery] = useState('');
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
 
   // Update local content when prop changes
   if (content !== localContent && !isEditing) {
     setLocalContent(content);
+    setSelection(null);
   }
+
+  const hasSelection = useMemo(() => Boolean(selection && selection.text.trim()), [selection]);
 
   const handleChange = (newContent: string) => {
     setLocalContent(newContent);
@@ -99,6 +114,31 @@ export function Canvas({
         }
       }
     }
+  };
+
+  const handleInlineEdit = async () => {
+    if (!onInlineEdit || !selection || !selection.text.trim() || !inlineEditQuery.trim()) return;
+    try {
+      setIsInlineEditing(true);
+      await onInlineEdit(selection, inlineEditQuery.trim());
+      setInlineEditQuery('');
+      setSelection(null);
+    } finally {
+      setIsInlineEditing(false);
+    }
+  };
+
+  const handleSelectionChange = (event: SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = event.target as HTMLTextAreaElement;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    if (start === end) {
+      setSelection(null);
+      return;
+    }
+
+    const text = target.value.slice(start, end);
+    setSelection({ start, end, text });
   };
 
   return (
@@ -231,6 +271,7 @@ export function Canvas({
             id="markdown-editor"
             value={localContent}
             onChange={(e) => handleChange(e.target.value)}
+            onSelect={handleSelectionChange}
             className="w-full h-full p-6 font-mono text-sm resize-none focus:outline-none bg-background"
             placeholder="Start typing... Use markdown formatting:
 
@@ -286,6 +327,47 @@ export function Canvas({
             >
               {localContent || '*No content yet. Click Edit to start writing.*'}
             </ReactMarkdown>
+          </div>
+        )}
+
+        {isEditing && editable && onInlineEdit && (
+          <div className="border-t bg-muted/40 p-4 space-y-2">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+              <input
+                type="text"
+                value={inlineEditQuery}
+                onChange={(e) => setInlineEditQuery(e.target.value)}
+                placeholder={hasSelection ? 'Describe the change for the selected text' : 'Select text in the editor to enable inline edit'}
+                className="flex-1 rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-70"
+                disabled={!hasSelection || isInlineEditing}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={handleInlineEdit}
+                  disabled={!hasSelection || !inlineEditQuery.trim() || isInlineEditing}
+                  className="whitespace-nowrap"
+                >
+                  {isInlineEditing ? 'Applying...' : 'Apply inline edit'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelection(null)}
+                  disabled={!hasSelection || isInlineEditing}
+                >
+                  Clear selection
+                </Button>
+              </div>
+            </div>
+            {hasSelection && selection && (
+              <p className="text-xs text-muted-foreground">
+                Editing selection: <span className="font-mono break-words">{selection.text}</span>
+              </p>
+            )}
           </div>
         )}
       </div>
