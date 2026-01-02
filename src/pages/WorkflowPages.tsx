@@ -849,6 +849,48 @@ export function TestYourselfPage() {
     [briefs, briefsContent]
   );
 
+  const extractBriefSection = (content: string, sectionTitle: string) => {
+    const regex = new RegExp(`\\*\\*${sectionTitle}\\*\\*:?\\s*([\\s\\S]*?)(?=\\n\\s*\\*\\*\\w+\\*\\*|$)`, 'i');
+    const match = content.match(regex);
+    return match?.[1]?.trim();
+  };
+
+  const buildBriefInstructionsPayload = () => {
+    if (briefs.length > 0) {
+      const fallback = combinedBriefsContent || '';
+      const titles = briefs.map((brief) => brief.title).filter(Boolean);
+
+      const buildSectionText = (label: string) => {
+        const sectionText = briefs
+          .map((brief, index) => {
+            const content = extractBriefSection(brief.content, label);
+            if (!content) return '';
+            return `Brief ${index + 1}: ${content}`;
+          })
+          .filter(Boolean)
+          .join('\n\n');
+
+        return sectionText || fallback || `No ${label.toLowerCase()} provided`;
+      };
+
+      return {
+        title: titles.join(' | ') || 'Test Questions',
+        objectives: buildSectionText('Objectives'),
+        overview: buildSectionText('Overview'),
+        content: buildSectionText('Content'),
+      };
+    }
+
+    const fallbackContent = combinedBriefsContent || 'No brief content available';
+
+    return {
+      title: 'Test Questions',
+      objectives: fallbackContent,
+      overview: fallbackContent,
+      content: fallbackContent,
+    };
+  };
+
   useEffect(() => {
     setCurrentStage('test_yourself');
     if (!testContent && combinedBriefsContent) {
@@ -870,19 +912,12 @@ export function TestYourselfPage() {
     setIsInitializing(true);
 
     try {
-      // Extract brief instructions from briefs
-      const briefInstructions = {
-        title: 'Test Questions',
-        learning_objectives: [],
-        summary: combinedBriefsContent,
-      };
+      const briefInstructions = buildBriefInstructionsPayload();
 
-      const generator = apiClient.post('/api/testyourself/generate-test', {
+      const response = await apiClient.post('/api/testyourself/generate-test', {
         artifact: { content: combinedBriefsContent },
         brief_instructions: briefInstructions,
       });
-
-      const response = await generator;
       
       // Handle streaming response
       if (response.data) {
