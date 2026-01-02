@@ -7,11 +7,12 @@ import { ChatPanel } from '@/components/Chat';
 import { Button } from '@/components/UI';
 import { ConnectConfigForm } from '@/components/Configuration';
 import { useWorkflow } from '@/providers/WorkflowProvider';
-import { chatCompletion, adjustLength, adjustLevel, exportArtifact, importArtifact } from '@/lib/apiService';
+import { chatCompletion, adjustLength, adjustLevel, exportArtifact, importArtifact, updateSelection } from '@/lib/apiService';
 import { apiClient, streamSSE } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { parseBriefsContent, combineBriefsContent } from '@/lib/briefs';
 import type { ConnectConfiguration } from '@/types';
+import type { SelectionInfo } from '@/components/Canvas';
 
 let lastTestGenerationSignature: string | null = null;
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
@@ -22,6 +23,37 @@ const toFileSlug = (value: string) =>
 
 const addAssistantMessage = (setMessages: SetMessages, content: string) => {
   setMessages((prev) => [...prev, { role: 'assistant', content }]);
+};
+
+const extractTextChunk = (chunk: any) => {
+  if (!chunk) return '';
+  if (typeof chunk.content === 'string') return chunk.content;
+  if (chunk.event === 'on_progress_update') return '';
+  if (typeof chunk.chunk === 'string' && !chunk.event) return chunk.chunk;
+  if (typeof chunk.chunk === 'string' && chunk.event !== 'on_rewrite_artifact') return chunk.chunk;
+  return '';
+};
+
+const extractArtifactUpdate = (chunk: any) => {
+  if (!chunk) return '';
+  if (typeof chunk.artifact === 'string' && chunk.artifact.trim()) return chunk.artifact;
+
+  const rewriteEvents = ['on_rewrite_artifact', 'rewrite_artifact'];
+  if (rewriteEvents.includes(chunk.event) && typeof chunk.chunk === 'string') {
+    return chunk.chunk;
+  }
+
+  return '';
+};
+
+const replaceSelectionWithUpdate = (
+  content: string,
+  selection: Pick<SelectionInfo, 'start' | 'end'>,
+  replacement: string
+) => {
+  const safeStart = Math.max(0, Math.min(selection.start, content.length));
+  const safeEnd = Math.max(safeStart, Math.min(selection.end, content.length));
+  return `${content.slice(0, safeStart)}${replacement}${content.slice(safeEnd)}`;
 };
 
 const downloadArtifact = async (
@@ -138,12 +170,14 @@ export function OutlinePage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) response += chunk.content;
-        if (chunk.artifact) updatedArtifact = chunk.artifact;
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) response += textChunk;
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) updatedArtifact = artifactUpdate;
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== outlineContent) setOutlineContent(updatedArtifact);
+      if (updatedArtifact && updatedArtifact !== outlineContent) setOutlineContent(updatedArtifact);
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
@@ -168,7 +202,7 @@ export function OutlinePage() {
     setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
 
     try {
-      let newContent = '';
+      let newContent = outlineContent;
       const generator = adjustLevel({
         newLevel: level,
         messages,
@@ -177,12 +211,20 @@ export function OutlinePage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
+        const textChunk = extractTextChunk(chunk);
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) {
+          newContent = artifactUpdate;
+        } else if (textChunk) {
+          newContent = textChunk;
+        }
       }
 
-      if (newContent) {
+      if (newContent && newContent !== outlineContent) {
         setOutlineContent(newContent);
         setMessages((prev) => [...prev, { role: 'assistant', content: `Content adjusted to ${level} level.` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'No updates were returned for this request.' }]);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -199,7 +241,7 @@ export function OutlinePage() {
     setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
 
     try {
-      let newContent = '';
+      let newContent = outlineContent;
       const generator = adjustLength({
         newLength: length,
         messages,
@@ -208,16 +250,68 @@ export function OutlinePage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
+        const textChunk = extractTextChunk(chunk);
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) {
+          newContent = artifactUpdate;
+        } else if (textChunk) {
+          newContent = textChunk;
+        }
       }
 
-      if (newContent) {
+      if (newContent && newContent !== outlineContent) {
         setOutlineContent(newContent);
         setMessages((prev) => [...prev, { role: 'assistant', content: `Content made ${length}.` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'No updates were returned for this request.' }]);
       }
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the length.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInlineEdit = async (selection: SelectionInfo, query: string) => {
+    if (!parsedSources.length || !outlineContent) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Inline edit: ${query}` }]);
+
+    try {
+      let assistantResponse = '';
+      let replacement = '';
+
+      const generator = updateSelection({
+        query,
+        artifactChunk: { block: outlineContent, selection: selection.text },
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) assistantResponse += textChunk;
+
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) replacement = artifactUpdate;
+      }
+
+      const updatedContent = replacement
+        ? replaceSelectionWithUpdate(outlineContent, selection, replacement)
+        : outlineContent;
+
+      setOutlineContent(updatedContent);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: assistantResponse || 'Selection updated.' },
+      ]);
+    } catch (error) {
+      console.error('Error updating selection:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, there was an error applying the inline edit.' },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -263,6 +357,7 @@ export function OutlinePage() {
             onExport={handleExport}
             onImport={handleImport}
             onRegenerate={handleRegenerate}
+            onInlineEdit={handleInlineEdit}
           />
         )
       }
@@ -450,12 +545,14 @@ export function BriefsPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) response += chunk.content;
-        if (chunk.artifact) updatedArtifact = chunk.artifact;
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) response += textChunk;
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) updatedArtifact = artifactUpdate;
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== currentBrief.content) {
+      if (updatedArtifact && updatedArtifact !== currentBrief.content) {
         const updatedBriefs = briefs.map((brief, i) =>
           i === currentBriefIndex ? { ...brief, content: updatedArtifact } : brief
         );
@@ -488,7 +585,7 @@ export function BriefsPage() {
     setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
 
     try {
-      let newContent = '';
+      let newContent = currentBrief.content;
       const generator = adjustLevel({
         newLevel: level,
         messages,
@@ -497,16 +594,24 @@ export function BriefsPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
+        const textChunk = extractTextChunk(chunk);
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) {
+          newContent = artifactUpdate;
+        } else if (textChunk) {
+          newContent = textChunk;
+        }
       }
 
-      if (newContent) {
+      if (newContent && newContent !== currentBrief.content) {
         const updatedBriefs = briefs.map((brief, i) =>
           i === currentBriefIndex ? { ...brief, content: newContent } : brief
         );
         setBriefs(updatedBriefs);
         setBriefsContent(combineBriefsContent(updatedBriefs));
         setMessages((prev) => [...prev, { role: 'assistant', content: `Content adjusted to ${level} level.` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'No updates were returned for this request.' }]);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -523,7 +628,7 @@ export function BriefsPage() {
     setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
 
     try {
-      let newContent = '';
+      let newContent = currentBrief.content;
       const generator = adjustLength({
         newLength: length,
         messages,
@@ -532,20 +637,76 @@ export function BriefsPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
+        const textChunk = extractTextChunk(chunk);
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) {
+          newContent = artifactUpdate;
+        } else if (textChunk) {
+          newContent = textChunk;
+        }
       }
 
-      if (newContent) {
+      if (newContent && newContent !== currentBrief.content) {
         const updatedBriefs = briefs.map((brief, i) =>
           i === currentBriefIndex ? { ...brief, content: newContent } : brief
         );
         setBriefs(updatedBriefs);
         setBriefsContent(combineBriefsContent(updatedBriefs));
         setMessages((prev) => [...prev, { role: 'assistant', content: `Content made ${length}.` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'No updates were returned for this request.' }]);
       }
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the length.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInlineEdit = async (selection: SelectionInfo, query: string) => {
+    if (!parsedSources.length || !currentBrief) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Inline edit: ${query}` }]);
+
+    try {
+      let assistantResponse = '';
+      let replacement = '';
+
+      const generator = updateSelection({
+        query,
+        artifactChunk: { block: currentBrief.content, selection: selection.text },
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) assistantResponse += textChunk;
+
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) replacement = artifactUpdate;
+      }
+
+      const updatedContent = replacement
+        ? replaceSelectionWithUpdate(currentBrief.content, selection, replacement)
+        : currentBrief.content;
+
+      const updatedBriefs = briefs.map((brief, i) =>
+        i === currentBriefIndex ? { ...brief, content: updatedContent } : brief
+      );
+      setBriefs(updatedBriefs);
+      setBriefsContent(combineBriefsContent(updatedBriefs));
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: assistantResponse || 'Selection updated.' },
+      ]);
+    } catch (error) {
+      console.error('Error updating selection:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, there was an error applying the inline edit.' },
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -600,6 +761,7 @@ export function BriefsPage() {
             onExport={handleExport}
             onImport={handleImport}
             onRegenerate={handleRegenerate}
+            onInlineEdit={handleInlineEdit}
           />
         ) : (
           <div className="flex items-center justify-center h-full border rounded-lg bg-card">
@@ -816,12 +978,14 @@ export function ConnectPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) response += chunk.content;
-        if (chunk.artifact) updatedArtifact = chunk.artifact;
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) response += textChunk;
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) updatedArtifact = artifactUpdate;
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== connectContent) setConnectContent(updatedArtifact);
+      if (updatedArtifact && updatedArtifact !== connectContent) setConnectContent(updatedArtifact);
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
@@ -837,6 +1001,50 @@ export function ConnectPage() {
     setMessages([]);
     setConnectContent('');
     await generateConnect(availableBriefs);
+  };
+
+  const handleInlineEdit = async (selection: SelectionInfo, query: string) => {
+    if (!parsedSources.length || !connectContent) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Inline edit: ${query}` }]);
+
+    try {
+      let assistantResponse = '';
+      let replacement = '';
+
+      const generator = updateSelection({
+        query,
+        artifactChunk: { block: connectContent, selection: selection.text },
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) assistantResponse += textChunk;
+
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) replacement = artifactUpdate;
+      }
+
+      const updatedContent = replacement
+        ? replaceSelectionWithUpdate(connectContent, selection, replacement)
+        : connectContent;
+
+      setConnectContent(updatedContent);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: assistantResponse || 'Selection updated.' },
+      ]);
+    } catch (error) {
+      console.error('Error updating selection:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, there was an error applying the inline edit.' },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = async () => {
@@ -879,6 +1087,7 @@ export function ConnectPage() {
             onExport={handleExport}
             onImport={handleImport}
             onRegenerate={handleRegenerate}
+            onInlineEdit={handleInlineEdit}
           />
         )
       }
@@ -922,6 +1131,7 @@ export function TestYourselfPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const hasRequestedTestRef = useRef(false);
   const combinedBriefsContent = useMemo(
     () => (briefs.length > 0 ? combineBriefsContent(briefs) : briefsContent),
     [briefs, briefsContent]
@@ -971,6 +1181,10 @@ export function TestYourselfPage() {
 
   useEffect(() => {
     setCurrentStage('test_yourself');
+    if (combinedBriefsContent && combinedBriefsContent !== lastTestGenerationSignature) {
+      hasRequestedTestRef.current = false;
+    }
+
     if (!combinedBriefsContent || testContent) {
       setIsInitializing(false);
       return;
@@ -978,11 +1192,12 @@ export function TestYourselfPage() {
 
     // Avoid duplicate requests in React StrictMode by only generating when the
     // combined briefs content changes (new signature).
-    if (combinedBriefsContent === lastTestGenerationSignature) {
+    if (hasRequestedTestRef.current || combinedBriefsContent === lastTestGenerationSignature) {
       setIsInitializing(false);
       return;
     }
 
+    hasRequestedTestRef.current = true;
     lastTestGenerationSignature = combinedBriefsContent;
     generateTest();
   }, [combinedBriefsContent, testContent]);
@@ -1059,12 +1274,14 @@ export function TestYourselfPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) response += chunk.content;
-        if (chunk.artifact) updatedArtifact = chunk.artifact;
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) response += textChunk;
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) updatedArtifact = artifactUpdate;
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== testContent) setTestContent(updatedArtifact);
+      if (updatedArtifact && updatedArtifact !== testContent) setTestContent(updatedArtifact);
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
@@ -1079,8 +1296,53 @@ export function TestYourselfPage() {
 
     setMessages([]);
     setTestContent('');
+    hasRequestedTestRef.current = false;
     lastTestGenerationSignature = null;
     await generateTest();
+  };
+
+  const handleInlineEdit = async (selection: SelectionInfo, query: string) => {
+    if (!parsedSources.length || !testContent) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Inline edit: ${query}` }]);
+
+    try {
+      let assistantResponse = '';
+      let replacement = '';
+
+      const generator = updateSelection({
+        query,
+        artifactChunk: { block: testContent, selection: selection.text },
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) assistantResponse += textChunk;
+
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) replacement = artifactUpdate;
+      }
+
+      const updatedContent = replacement
+        ? replaceSelectionWithUpdate(testContent, selection, replacement)
+        : testContent;
+
+      setTestContent(updatedContent);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: assistantResponse || 'Selection updated.' },
+      ]);
+    } catch (error) {
+      console.error('Error updating selection:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, there was an error applying the inline edit.' },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = async () => {
@@ -1123,6 +1385,7 @@ export function TestYourselfPage() {
             onExport={handleExport}
             onImport={handleImport}
             onRegenerate={handleRegenerate}
+            onInlineEdit={handleInlineEdit}
           />
         )
       }
@@ -1230,12 +1493,14 @@ export function ExecutiveSummaryPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) response += chunk.content;
-        if (chunk.artifact) updatedArtifact = chunk.artifact;
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) response += textChunk;
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) updatedArtifact = artifactUpdate;
       }
 
       setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== summaryContent) setSummaryContent(updatedArtifact);
+      if (updatedArtifact && updatedArtifact !== summaryContent) setSummaryContent(updatedArtifact);
     } catch (error) {
       console.error('Error:', error);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
@@ -1251,7 +1516,7 @@ export function ExecutiveSummaryPage() {
     setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
 
     try {
-      let newContent = '';
+      let newContent = summaryContent;
       const generator = adjustLevel({
         newLevel: level,
         messages,
@@ -1260,12 +1525,20 @@ export function ExecutiveSummaryPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
+        const textChunk = extractTextChunk(chunk);
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) {
+          newContent = artifactUpdate;
+        } else if (textChunk) {
+          newContent = textChunk;
+        }
       }
 
-      if (newContent) {
+      if (newContent && newContent !== summaryContent) {
         setSummaryContent(newContent);
         setMessages((prev) => [...prev, { role: 'assistant', content: `Executive summary adjusted to ${level} level.` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'No updates were returned for this request.' }]);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -1282,7 +1555,7 @@ export function ExecutiveSummaryPage() {
     setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
 
     try {
-      let newContent = '';
+      let newContent = summaryContent;
       const generator = adjustLength({
         newLength: length,
         messages,
@@ -1291,12 +1564,20 @@ export function ExecutiveSummaryPage() {
       });
 
       for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
+        const textChunk = extractTextChunk(chunk);
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) {
+          newContent = artifactUpdate;
+        } else if (textChunk) {
+          newContent = textChunk;
+        }
       }
 
-      if (newContent) {
+      if (newContent && newContent !== summaryContent) {
         setSummaryContent(newContent);
         setMessages((prev) => [...prev, { role: 'assistant', content: `Executive summary made ${length}.` }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'No updates were returned for this request.' }]);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -1314,6 +1595,50 @@ export function ExecutiveSummaryPage() {
 
   const handleImport = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleInlineEdit = async (selection: SelectionInfo, query: string) => {
+    if (!parsedSources.length || !summaryContent) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', content: `Inline edit: ${query}` }]);
+
+    try {
+      let assistantResponse = '';
+      let replacement = '';
+
+      const generator = updateSelection({
+        query,
+        artifactChunk: { block: summaryContent, selection: selection.text },
+        source: parsedSources,
+      });
+
+      for await (const chunk of generator) {
+        const textChunk = extractTextChunk(chunk);
+        if (textChunk) assistantResponse += textChunk;
+
+        const artifactUpdate = extractArtifactUpdate(chunk);
+        if (artifactUpdate) replacement = artifactUpdate;
+      }
+
+      const updatedContent = replacement
+        ? replaceSelectionWithUpdate(summaryContent, selection, replacement)
+        : summaryContent;
+
+      setSummaryContent(updatedContent);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: assistantResponse || 'Selection updated.' },
+      ]);
+    } catch (error) {
+      console.error('Error updating selection:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, there was an error applying the inline edit.' },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1370,6 +1695,7 @@ export function ExecutiveSummaryPage() {
               onExport={handleExport}
               onImport={handleImport}
               onRegenerate={handleRegenerate}
+              onInlineEdit={handleInlineEdit}
             />
             <input
               ref={fileInputRef}
