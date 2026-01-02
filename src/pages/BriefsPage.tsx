@@ -20,17 +20,15 @@ export function BriefsPage() {
     setCurrentStage('brief');
     
     // Auto-redirect to /briefs/1 if no index
-    if (!numericIndex && briefsData && briefsData.length > 0) {
+    if (!numericIndex) {
       navigate('/briefs/1', { replace: true });
       return;
     }
-  }, [numericIndex, briefsData, navigate, setCurrentStage]);
+  }, [numericIndex, navigate, setCurrentStage]);
 
   // If invalid index, redirect
   if (Number.isNaN(numericIndex) || numericIndex < 1) {
-    if (briefsData && briefsData.length > 0) {
-      navigate('/briefs/1', { replace: true });
-    }
+    navigate('/briefs/1', { replace: true });
     return null;
   }
 
@@ -87,10 +85,25 @@ function IndividualBrief({
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  const [hasTriedGeneration, setHasTriedGeneration] = useState(false);
+
   const currentBrief = briefsData?.[briefIndex];
 
   const generateThisBrief = useCallback(async () => {
+    console.log('🔍 generateThisBrief called for index:', briefIndex);
+    console.log('📊 Current state:', { 
+      hasConfiguration: !!configuration, 
+      hasOutline: !!outlineContent,
+      sourcesCount: parsedSources.length,
+      briefsDataLength: briefsData?.length || 0
+    });
+
     if (!configuration || !outlineContent || !parsedSources.length) {
+      console.error('❌ Missing prerequisites:', { 
+        configuration: !!configuration, 
+        outlineContent: !!outlineContent,
+        parsedSources: parsedSources.length 
+      });
       setIsInitializing(false);
       return;
     }
@@ -98,8 +111,10 @@ function IndividualBrief({
     setIsGenerating(true);
     setIsLoading(true);
     setIsInitializing(true);
+    setHasTriedGeneration(true);
 
     try {
+      console.log('📤 Extracting brief instructions...');
       // Extract instructions first
       const extractResponse = await apiClient.post('/api/brief/extract-instructions', {
         config: {
@@ -114,19 +129,22 @@ function IndividualBrief({
         },
       });
 
+      console.log('✅ Brief instructions extracted:', extractResponse.data.briefs.length);
       const briefInstructions = extractResponse.data.briefs;
       const currentInstruction = briefInstructions[briefIndex];
 
       if (!currentInstruction) {
-        throw new Error('Brief instruction not found');
+        throw new Error(`Brief instruction not found for index ${briefIndex}`);
       }
 
+      console.log(`📤 Generating brief ${briefIndex + 1}...`);
       // Generate this specific brief
       const response = await apiClient.post('/api/brief/generate', {
         source: parsedSources,
         brief_instructions: currentInstruction,
       });
 
+      console.log(`✅ Brief ${briefIndex + 1} generated successfully!`);
       // Update briefs data array
       const newBriefsData = [...(briefsData || [])];
       newBriefsData[briefIndex] = {
@@ -137,7 +155,7 @@ function IndividualBrief({
 
       setMessages([{ role: 'assistant', content: `Brief ${briefIndex + 1} generated successfully!` }]);
     } catch (error) {
-      console.error('Error generating brief:', error);
+      console.error('❌ Error generating brief:', error);
       setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating this brief.' }]);
     } finally {
       setIsGenerating(false);
@@ -147,12 +165,31 @@ function IndividualBrief({
   }, [briefIndex, configuration, outlineContent, parsedSources, briefsData, setBriefsData, setIsGenerating]);
 
   useEffect(() => {
-    if (!currentBrief) {
+    // Reset generation flag when index changes
+    setHasTriedGeneration(false);
+  }, [briefIndex]);
+
+  useEffect(() => {
+    console.log('🔄 useEffect triggered:', { 
+      briefIndex, 
+      hasBrief: !!currentBrief,
+      briefsDataExists: !!briefsData,
+      briefsDataLength: briefsData?.length || 0,
+      hasTriedGeneration
+    });
+    
+    if (!currentBrief && !hasTriedGeneration && !isLoading) {
+      console.log('🚀 No brief found and haven\'t tried generation yet, triggering generation...');
       generateThisBrief();
-    } else {
+    } else if (currentBrief) {
+      console.log('✅ Brief already exists, skipping generation');
+      setIsInitializing(false);
+    } else if (hasTriedGeneration && !currentBrief) {
+      console.log('⚠️ Generation was tried but brief still not available');
       setIsInitializing(false);
     }
-  }, [briefIndex, currentBrief, generateThisBrief]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [briefIndex, briefsData, hasTriedGeneration, isLoading]); // Depend on briefIndex and briefsData
 
   const handleSendMessage = async (message: string) => {
     if (!parsedSources.length || !currentBrief) return;
