@@ -86,3 +86,54 @@
 }
 
 
+
+
+
+### connect :
+
+# ------------------------------ Connect Models ----------------------------- #
+# --------------------------------------------------------------------------- #
+
+
+class ConnectConfig(BaseModel):
+    role: Optional[str] = Field(
+        default=None,
+        description="Professional role the learner assumes in the scenario. Can specify 'other' or any custom role.",
+    )
+    department: Optional[str] = Field(
+        default=None,
+        description="Functional department where the scenario is set. Can specify 'other' or any custom department.",
+    )
+    country_type: Optional[List[str]] = Field(
+        default=None, description="Classification of the country. Can specify 'other' or any custom type."
+    )
+    authority_type: Optional[List[str]] = Field(
+        default=None,
+        description="Type of regulatory or supervisory authority involved. Can specify 'other' or any custom type.",
+    )
+    financial_institution: Optional[List[str]] = Field(
+        default=None,
+        description="The kind of financial institution featured. Can specify 'other' or any custom institution.",
+    )
+    artefacts: Optional[List[str]] = Field(
+        default=None, description="Scenario information sources. Can specify 'other' or any custom sources."
+    )
+    characters: Optional[List[str]] = Field(
+        default=None, description="Fictional characters in the scenario. Can specify 'other' or any custom characters."
+    )
+    scenario_description: Optional[str] = Field(
+        default=None,
+        description="A brief narrative outlining the context or background of the scenario. It sets the stage for the learner by describing the situation they will address.",
+    )
+    keypoints: Optional[List[str]] = Field(default=None, description="Key tasks the learner must perform.")
+    task_examples: Optional[str] = Field(default=None, description="Example tasks shaping the scenario.")
+    questions: Optional[List[Literal["Fill-in-the-Blank", "Multiple Choice Question", "True/False", "Yes/No"]]] = Field(
+        default=None,
+        description="Types of questions to include. Possible values are: Fill-in-the-Blank, Multiple Choice Question, True/False.",
+    )
+
+
+class ConnectRequest(BaseModel):
+    briefs: list[Artifact]
+    parsed_outline: ParsedOutline
+    config: ConnectConfig
