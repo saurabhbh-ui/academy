@@ -1,17 +1,20 @@
 payload:
 
-
-{
-  "artifact": {
-    "content": "string"
-  },
-  "brief_instructions": {
-    "title": "string",
-    "objectives": "string",
-    "overview": "string",
-    "content": "string"
+[
+  {
+    "fileType": ".pdf",
+    "content": "string",
+    "figures": [
+      {
+        "id": "string",
+        "b64image": "string",
+        "caption": "string",
+        "footnote": "string",
+        "pageNumber": 0
+      }
+    ]
   }
-}
+]
 
 
 
@@ -368,20 +371,274 @@ class ReviewRequest(BaseModel):
 
 
 
+### code for exsum: 
 
-#### Generated content with current code: 
-data: {"event":"on_progress_update","chunk":"Step1/7 : Generating learning objectives..."}
+## C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\api\exsum\router.py
 
-data: {"event":"on_progress_update","chunk":"Step2/7 : Generating question stems..."}
+import logging
 
-data: {"event":"on_progress_update","chunk":"Step3/7 : Identifying correct answers..."}
+import openai
+from fastapi import APIRouter, HTTPException, Request
 
-data: {"event":"on_progress_update","chunk":"Step4/7 : Generating distractors..."}
+from app.api.schemas import ArtifactWithResponse, ChatMessage, SourceDocument
+from app.core.exsum_generation import ExsumPromptTemplate, generate_executive_summary
+from app.core.followup import GenerationFollowupPromptTemplate, write_followup_message
 
-data: {"event":"on_progress_update","chunk":"Step5/7 : Reducing options..."}
+router = APIRouter(prefix="/api/exsum")
+logger = logging.getLogger(__name__)
 
-data: {"event":"on_progress_update","chunk":"Step6/7 : Providing feedback..."}
 
-data: {"event":"on_progress_update","chunk":"Step7/7: Formatting generated questions..."}
+@router.post("/generate-exsum", summary="Generate Executive Summary")
+async def generate_exsum_endpoint(request: Request, source: list[SourceDocument]) -> ArtifactWithResponse:
+    """
+    Generate Executive Summary.
+    This API generates **Executive summary from Source**.
+    """
+    try:
+        prompts: ExsumPromptTemplate = request.app.prompt_registry["exsum"]
+        artifact: str = generate_executive_summary(prompts=prompts, source=source)
 
-data: {"event":"on_rewrite_artifact","chunk":"## Objective 1: Explain the motivations and potential benefits driving central banks to explore the issuance of Central Bank Digital Currencies (CBDCs).\n\n### Question 1: True/False. \nWhich of the following statements reflect central banks' motivations for exploring CBDCs?\n- [Yes/No] Ensuring continued access to risk-free central bank money (Correct answer: Yes)\n- [Yes/No] Promoting greater diversity and competition in payment systems (Correct answer: Yes)\n- [Yes/No] Replacing commercial banks as payment providers (Correct answer: No)\n- [Yes/No] Preventing all forms of inflation in the economy (Correct answer: No)\n\nFeedback \nCentral banks are motivated to explore CBDCs to maintain public access to secure, risk-free money and to encourage competition and diversity in payment systems, especially as cash use declines. The statement about replacing commercial banks as payment providers is incorrect because CBDCs are designed to complement, not substitute, the existing banking sector. Preventing all forms of inflation is also a misconception; inflation control is a broader monetary policy issue and not a direct motivation for CBDC introduction.\n\n---\n\n### Question 2: True/False. \nWhich of the following benefits could CBDCs potentially deliver for the public and the financial system?\n- [Yes/No] Providing a secure and reliable alternative to cash as its use declines (Correct answer: Yes)\n- [Yes/No] Allowing rapid government fiscal transfers during emergencies (Correct answer: Yes)\n- [Yes/No] Making all payments anonymous and untraceable (Correct answer: No)\n- [Yes/No] Automatically guaranteeing higher interest rates for all savings (Correct answer: No)\n\nFeedback \nCBDCs can offer a secure alternative to cash and enable swift government transfers to citizens, supporting resilience in times of crisis. However, CBDCs are not intended to make all payments anonymous and untraceable; they must balance privacy with compliance and oversight. Likewise, CBDCs do not guarantee higher interest rates for all savings, as interest-bearing features are a complex policy choice and not a universal benefit.\n\n---\n\n### Question 3: Multiple-Choice-Single-Answer. \nWhat is a key reason central banks are considering the introduction of CBDCs?\n- To ensure everyone can access trustworthy digital money as cash usage falls (Correct answer)\n- To replace all commercial bank money with central bank money\n- To impose direct price controls throughout the economy\n- To remove cash from circulation entirely\n\nFeedback \nThe correct answer reflects the central banks’ goal to maintain access to safe central bank money as the use of physical cash declines. The other options are incorrect because CBDCs are not intended to substitute all commercial bank money, directly control prices, or fully eliminate cash; they are meant to coexist and support a diverse payment ecosystem.\n\n---\n\n### Question 4: Fill-the-Blank. \nComplete the following sentences about the motivations behind CBDC issuance.\n- CBDCs can help improve [financial inclusion/payment diversity/raising taxes] for people with limited access to banking services. (Correct answer: financial inclusion)\n- One motivation for CBDCs is to increase [payment resilience/interest rates/privacy] in case of disruptions to electronic networks. (Correct answer: payment resilience)\n- CBDCs are primarily designed to [raise taxes/offer privacy/replace banks] during economic downturns. (Correct answer: offer privacy)\n- CBDCs may offer [greater privacy/higher fees/zero inflation] than most private digital payment systems. (Correct answer: greater privacy)\n\nFeedback \nCBDCs are motivated by goals such as financial inclusion and payment resilience, making digital payments accessible and dependable for all, even during network disruptions. They may also offer greater privacy than most commercial digital payments, while remaining compliant with regulations. The statement about raising taxes is incorrect—CBDCs are not a tax collection mechanism and do not serve fiscal policy in this way.\n\n---\n\n## Objective 2: Identify and evaluate the key challenges, risks, and trade-offs associated with CBDC design and implementation, including financial stability, operational resilience, and technology considerations.\n\n### Question 1: True/False. \nWhich of the following statements describe challenges or risks linked to CBDC implementation?\n- [Yes/No] The risk of rapid withdrawals from banks to CBDCs causing instability (“digital runs”) (Correct answer: Yes)\n- [Yes/No] The threat of cyberattacks targeting CBDC infrastructure (Correct answer: Yes)\n- [Yes/No] CBDCs guarantee perfect financial stability at all times (Correct answer: No)\n- [Yes/No] CBDCs require no technological investment or upgrades (Correct answer: No)\n\nFeedback \nCBDCs introduce new challenges, such as the risk of digital runs that could destabilise banks and the need for robust cyber security to protect the digital infrastructure. It is incorrect to think that CBDCs guarantee perfect financial stability or require no technological investment. In reality, their introduction necessitates careful planning, significant investment, and ongoing risk management.\n\n---\n\n### Question 2: True/False. \nWhich of the following are trade-offs central banks must consider when designing a CBDC?\n- [Yes/No] Balancing transaction speed with robust security measures (Correct answer: Yes)\n- [Yes/No] Ensuring universal access while managing infrastructure costs (Correct answer: Yes)\n- [Yes/No] Focusing only on high fees to prevent overuse (Correct answer: No)\n- [Yes/No] Ignoring stakeholder input in the design process (Correct answer: No)\n\nFeedback \nCentral banks must balance rapid transaction settlement with the need for strong security, and strive for universal access without incurring unsustainable costs. High user fees and ignoring stakeholder feedback are not valid trade-offs—in fact, high fees can undermine inclusion and stakeholder engagement is critical to a successful CBDC design.\n\n---\n\n### Question 3: Multiple-Choice-Single-Answer. \nWhat is a major risk central banks face if a CBDC is widely adopted quickly by the public?\n- Banks may face liquidity challenges due to large-scale transfers to CBDC accounts (Correct answer)\n- CBDCs will automatically increase bank profits\n- All payments will become anonymous by default\n- System resilience will always improve with rapid CBDC adoption\n\nFeedback \nA rapid shift of funds into CBDCs can threaten the liquidity of commercial banks, posing risks to financial stability. The incorrect options reflect common misconceptions: CBDCs do not automatically boost bank profits, make all payments anonymous, or guarantee improved system resilience without careful design.\n\n---\n\n### Question 4: Fill-the-Blank. \nComplete the following sentences describing risks or challenges associated with CBDCs.\n- A sudden shift of deposits from banks to CBDC could lead to a [digital run/interest rate cap/physical theft] (Correct answer: digital run)\n- Heavy use of foreign CBDCs could result in [digital dollarisation/unlimited access/cyber risk], affecting monetary control. (Correct answer: digital dollarisation)\n- CBDCs are vulnerable to [cyber risk/physical theft/unlimited access]. (Correct answer: cyber risk)\n- Protecting CBDCs from [cyber risk/physical theft/cash withdrawal delays] is a critical challenge for central banks. (Correct answer: cyber risk)\n\nFeedback \nDigital runs and digital dollarisation are real concerns for central banks, as they can undermine domestic monetary policy and financial stability. Cyber risk is a major challenge because digital systems are inherently vulnerable to hacking and fraud. Physical theft is a concern for cash, not digital currencies, so this statement is incorrect.\n\n---\n\n## Objective 3: Describe the foundational principles, core features, and technological requirements central banks should consider when designing and deploying a CBDC.\n\n### Question 1: True/False. \nWhich of the following statements align with the core principles guiding CBDC design?\n- [Yes/No] CBDCs should not undermine financial or monetary stability (“do no harm”) (Correct answer: Yes)\n- [Yes/No] CBDCs should encourage innovation and improve payment efficiency (Correct answer: Yes)\n- [Yes/No] CBDCs should replace all forms of money immediately (Correct answer: No)\n- [Yes/No] CBDCs must always be interest-bearing (Correct answer: No)\n\nFeedback \nSound CBDC design is anchored in principles like “do no harm” and fostering innovation and efficiency. The idea that CBDCs should instantly replace all other forms of money or must always pay interest is incorrect—central banks aim for coexistence and flexibility in how CBDCs are designed and used.\n\n---\n\n### Question 2: True/False. \nWhich of the following are considered essential technological features for a robust CBDC platform?\n- [Yes/No] Ability to process high transaction volumes efficiently (scalability) (Correct answer: Yes)\n- [Yes/No] Use of strong security measures such as encryption and tamper-resistant hardware (Correct answer: Yes)\n- [Yes/No] Providing only offline payment options with no online capability (Correct answer: No)\n- [Yes/No] Limiting access to the platform to banks only (Correct answer: No)\n\nFeedback \nScalability and strong security are critical for a CBDC platform to serve large populations and withstand cyber threats. Limiting the platform to offline use or restricting access to banks only undermines the accessibility and utility of a CBDC for the general public.\n\n---\n\n### Question 3: Multiple-Choice-Single-Answer. \nWhich principle is most important for maintaining public trust in a CBDC?\n- Ensuring that the CBDC does not compromise the stability of the financial system (Correct answer)\n- Guaranteeing that CBDC transactions are always anonymous\n- Eliminating all cash transactions immediately\n- Maximising complexity in the CBDC’s design\n\nFeedback \nPublic trust depends on the CBDC supporting financial and monetary stability. The other options are incorrect because absolute anonymity is neither feasible nor desirable for compliance, eliminating cash could harm accessibility, and unnecessary complexity tends to reduce user confidence and adoption.\n\n---\n\n### Question 4: Fill-the-Blank. \nComplete the following sentences about the key features and design principles of CBDCs.\n- The system must provide [instant settlement/centralisation/high transaction fees] for user convenience. (Correct answer: instant settlement)\n- Legal [robustness/inflexibility/interest rates] is required for the central bank to issue CBDCs confidently. (Correct answer: robustness)\n- CBDCs should be [inflexible/convertible/adaptable] to new technology developments. (Correct answer: adaptable)\n- [Interoperability/centralisation/cash withdrawal delays] ensures smooth transfers between banks and digital wallets. (Correct answer: interoperability)\n\nFeedback \nInstant settlement and legal robustness are critical features for a successful CBDC. Interoperability ensures that users can transfer funds seamlessly across platforms, supporting inclusion and efficiency. Inflexibility to new technology developments is a disadvantage, as CBDCs must be adaptable to evolving needs and innovations."}
+        followup_prompts: GenerationFollowupPromptTemplate = request.app.prompt_registry["followup"]
+        followup_content: str = write_followup_message(
+            prompts=followup_prompts, stage="Executive Summary", artifact=artifact
+        )
+        followup_message = ChatMessage(role="assistant", content=followup_content)
+
+        return ArtifactWithResponse(content=artifact, response=followup_message)
+
+    except openai.APIStatusError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.message)
+    except openai.OpenAIError as err:
+        raise HTTPException(status_code=500, detail=f"OpenAIError of type {type(err)} was caught: {str(err)}")
+
+
+
+## C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\core\exsum_generation\chains.py
+import copy
+import logging
+
+from langchain_core.prompts import ChatPromptTemplate
+
+from app.api.schemas import DocName, SourceDocument
+from app.core.openai_ops import get_llm
+
+from .prompts import ExsumPromptTemplate
+from .suggest_exsum_figures import suggest_executive_summary_figures
+from .write_exsum import write_exsum_with_figures
+
+logger = logging.getLogger(__name__)
+
+
+def generate_executive_summary(prompts: ExsumPromptTemplate, source: list[SourceDocument]) -> str:
+    """
+    Generate an executive summary from the provided source document.
+
+    This function uses the provided prompts to suggest figures and write an executive summary
+    based on the source document.
+
+    Parameters:
+    - prompts (ExsumPromptTemplate): The template containing prompts for generating the executive summary.
+    - source (SourceDocument): The source document from which the executive summary is to be generated.
+
+    Returns:
+    - str: The generated executive summary content, or None if an error occurs during generation.
+    """
+
+    model = get_llm()
+
+    sources = copy.deepcopy(source)
+
+    # Merge the content of all source documents, separating them with headers
+    merged_content = ""
+    for i, source in enumerate(sources):
+        header_template = ChatPromptTemplate.from_template(prompts.file_header.prompt.template)
+        doc_model = model.with_structured_output(DocName)
+        header_chain = header_template | doc_model
+        headers = header_chain.invoke({"text": source.content})
+        logger.info(f"Document {i + 1}: {headers.header_title}")
+
+        # Append the header and content to the merged content
+        text_header = f"########################### File: {i + 1}, Document Name: {headers.header_title} #########################\n\n{source.content}\n\n"
+        merged_content += text_header
+
+    # Create a merged SourceDocument
+    merged_source = SourceDocument(
+        file_type=".pdf", content=merged_content, figures=[figure for source in sources for figure in source.figures]
+    )
+
+    suggested_figures = suggest_executive_summary_figures(prompts, merged_source)
+    exsum_content = write_exsum_with_figures(prompts=prompts, source=merged_source, suggested_figures=suggested_figures)
+    return exsum_content
+
+
+## C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\core\exsum_generation\prompts.py
+import logging
+from dataclasses import dataclass
+
+from langchain_core.messages import HumanMessage
+from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+
+from app.api.schemas import Figure, SourceDocument
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExsumPromptTemplate:
+    system: SystemMessagePromptTemplate
+    file: HumanMessagePromptTemplate
+    file_header: HumanMessagePromptTemplate
+    figure_caption: HumanMessagePromptTemplate
+    suggest_figure_system: HumanMessagePromptTemplate
+
+    def build_suggest_figures_prompt_template(self, source: SourceDocument) -> ChatPromptTemplate:
+        prompt_template = ChatPromptTemplate([self.suggest_figure_system])
+        # Add all figures in has a new message in the prompt template
+        for fig in source.figures:
+            try:
+                prompt_template += HumanMessage(
+                    content=[
+                        {
+                            "type": "text",
+                            "text": f'The caption of this image is: "{fig.caption}". Its id is "{fig.id}".',
+                        },
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{fig.b64image}"}},
+                    ]
+                )
+            except Exception as e:
+                # Ignore figure in case of error and continue
+                logger.error(f"Error processing figure ID {fig.id}: {e}", extra={"figure": fig.model_dump()})
+                continue
+        return prompt_template
+
+    def build_write_exsum_prompt_template(self, figures_data: list[Figure]) -> ChatPromptTemplate:
+        """
+        Build messages for figures to be included in the executive summary.
+
+        This function formats the captions and image URLs for each figure using
+        the provided prompts and returns a list of HumanMessage objects.
+
+        Parameters:
+        - figures_data (list[dict]): A list of dictionaries containing figure data.
+
+        Returns:
+        - list[HumanMessage]: A list of formatted HumanMessage objects for figures.
+        """
+        # Validate input variables because `.format` does not
+        if not sorted(self.figure_caption.input_variables) == ["caption", "id"]:
+            raise KeyError("Misaligned input variables found in prompt `exec_summary_figure_prompt`")
+
+        prompt_template = ChatPromptTemplate([self.system, self.file])
+        for fig in figures_data:
+            try:
+                # Multimodal messages are not well handled with ChatPromptTemplate, so we render the template here
+                # for the figure messages
+                content: HumanMessage = self.figure_caption.format(id=fig.id, caption=fig.caption).content
+                prompt_template += HumanMessage(
+                    content=[
+                        {"type": "text", "text": content},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{fig.b64image}"}},
+                    ]
+                )
+            except Exception as e:
+                logger.error(f"Error building figure message for figure ID : {e}", exc_info=False)
+                continue
+        return prompt_template
+
+
+## C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\core\exsum_generation\suggest_exsum_figures.py
+import logging
+import re
+
+from app.api.schemas import Figure, SourceDocument
+from app.core.openai_ops import get_llm
+
+from .prompts import ExsumPromptTemplate
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_ids(text) -> list[str]:
+    """
+    Extracts IDs from the given text using a regular expression pattern.
+    This function searches for all substrings enclosed within double square brackets [[ ]].
+
+    Parameters:
+    - text (str): The text from which to extract IDs.
+
+    Returns:
+    - List[str]: A list of extracted IDs.
+    """
+
+    pattern = r"\[\[(.*?)\]\]"
+    matches = re.findall(pattern, text)
+    matches = [m.strip() for m in matches]  # avoid issue with spaces added by LLM in id
+    return matches
+
+
+def suggest_executive_summary_figures(prompts: ExsumPromptTemplate, source: SourceDocument) -> list[Figure]:
+    """
+    Suggest figures for the executive summary based on the source document.
+
+    This function utilizes a language model to analyze the figures in the source document
+    and suggests which figures should be included in the executive summary.
+
+    Parameters:
+    - prompts (ExsumPromptTemplate): The prompt template for suggesting figures.
+    - source_doc (SourceDocument): The source document containing figures to be analyzed.
+
+    Returns:
+    - List[Figure]: A list of figures suggested for inclusion in the executive summary.
+    """
+    if len(source.figures) == 0:
+        return []
+    else:
+        model = get_llm()
+        prompt_template = prompts.build_suggest_figures_prompt_template(source=source)
+        chain = prompt_template | model
+        response = chain.invoke(input={})  # no inputs, variables, only multimodal messages
+        suggested_ids = _extract_ids(response.content)
+        suggested_figures_data = [fig for fig in source.figures if fig.id in suggested_ids]
+        logger.info(
+            f"Chose the following figures for the exsum: {suggested_ids}",
+            extra={"response": response.model_dump(), "suggested_ids": suggested_ids},
+        )
+        return suggested_figures_data
+
+
+## C:\Users\sa007769\Downloads\data-fsi-aicademy-api\app\core\exsum_generation\write_exsum.py
+import logging
+
+from langchain_core.prompts import ChatPromptTemplate
+
+from app.api.schemas import Figure, SourceDocument
+from app.core.openai_ops import get_llm
+
+from .prompts import ExsumPromptTemplate
+
+logger = logging.getLogger(__name__)
+
+
+def write_exsum_with_figures(
+    prompts: ExsumPromptTemplate, source: SourceDocument, suggested_figures: list[Figure]
+) -> str:
+    """
+    Write an executive summary including specified figures.
+
+    This function utilizes a language model to generate an executive summary
+    based on the provided source document and suggested figures.
+
+    Parameters:
+    - exsum_prompt (ExsumPromptTemplate): The template containing prompts for the executive summary.
+    - source (SourceDocument): The source document to base the executive summary on.
+    - suggested_figures (list[dict]): A list of suggested figures to include in the summary.
+
+    Returns:
+    - str: the generated executive summary artifact
+    """
+    model = get_llm()
+    prompt_template: ChatPromptTemplate = prompts.build_write_exsum_prompt_template(figures_data=suggested_figures)
+    chain = prompt_template | model
+    response = chain.invoke({"file_type": source.file_type, "parsed_content": source.content})
+    artifact = response.content
+    return artifact
