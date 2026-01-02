@@ -665,27 +665,48 @@ export function ConnectPage() {
       // Parse briefs into array format
       const briefsList = parseBriefs(briefsContent);
       
+      // Helper function to extract sections from brief content
+      const extractBriefSections = (content: string) => {
+        // Extract title (first heading or first line)
+        const titleMatch = content.match(/##\s*Brief\s*\d+:\s*(.+)/i) || content.match(/^(.+)/);
+        const title = titleMatch ? titleMatch[1].trim() : 'Brief';
+        
+        // Extract objectives (look for objectives section)
+        const objectivesMatch = content.match(/###?\s*Objectives?:?\s*\n([\s\S]*?)(?=\n###?|$)/i);
+        const objectives = objectivesMatch ? objectivesMatch[1].trim() : '';
+        
+        // Extract overview (look for overview/introduction section)
+        const overviewMatch = content.match(/###?\s*(?:Overview|Introduction):?\s*\n([\s\S]*?)(?=\n###?|$)/i);
+        const overview = overviewMatch ? overviewMatch[1].trim() : '';
+        
+        return { title, objectives, overview, content };
+      };
+      
       const response = await apiClient.post('/api/connect/generate-connect', {
         briefs: briefsList.map(brief => ({ content: brief.content })),
         parsedOutline: {
-          briefs: briefsList.map((brief, index) => ({
-            brief_number: index + 1,
-            topic: brief.title || `Brief ${index + 1}`,
-            pages: [],
-          })),
+          briefs: briefsList.map((brief) => {
+            const sections = extractBriefSections(brief.content);
+            return {
+              title: sections.title,
+              objectives: sections.objectives,
+              overview: sections.overview,
+              content: brief.content,
+            };
+          }),
         },
         config: {
-          role: connectConfiguration.learnerProfileRole,
-          department: connectConfiguration.learnerProfileDepartment,
-          countryType: connectConfiguration.scenarioDetailsCountryType,
-          authorityType: connectConfiguration.scenarioDetailsAuthorityType,
-          financialInstitution: connectConfiguration.scenarioDetailsFinancialInstitutionsType,
-          artefacts: connectConfiguration.artefacts,
-          characters: connectConfiguration.characterRoles,
-          keypoints: connectConfiguration.taskTypes,
-          taskExamples: connectConfiguration.taskExamples,
-          questions: connectConfiguration.questionTypes,
-          scenarioDescription: connectConfiguration.scenarioDescriptions,
+          role: connectConfiguration.learnerProfileRole || '',
+          department: connectConfiguration.learnerProfileDepartment || '',
+          countryType: connectConfiguration.scenarioDetailsCountryType || [],
+          authorityType: connectConfiguration.scenarioDetailsAuthorityType || [],
+          financialInstitution: connectConfiguration.scenarioDetailsFinancialInstitutionsType || [],
+          artefacts: connectConfiguration.artefacts || [],
+          characters: connectConfiguration.characterRoles || [],
+          scenarioDescription: connectConfiguration.scenarioDescriptions || '',
+          keypoints: connectConfiguration.taskTypes || [],
+          taskExamples: connectConfiguration.taskExamples || '',
+          questions: connectConfiguration.questionTypes || [],
         },
       });
 
