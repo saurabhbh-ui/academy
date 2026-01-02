@@ -1050,7 +1050,7 @@ export function TestYourselfPage() {
           <Button variant="outline" onClick={() => navigate('/connect')}>
             ← Back to Connect
           </Button>
-          <Button onClick={() => navigate('/executive-summary')} disabled={!testContent || isInitializing}>
+          <Button onClick={() => navigate('/summary')} disabled={!testContent || isInitializing}>
             Continue to Executive Summary →
           </Button>
         </div>
@@ -1097,9 +1097,7 @@ export function ExecutiveSummaryPage() {
     setIsInitializing(true);
 
     try {
-      const response = await apiClient.post('/api/exsum/generate-exsum', {
-        source: parsedSources,
-      });
+      const response = await apiClient.post('/api/exsum/generate-exsum', parsedSources);
 
       setSummaryContent(response.data.content);
       setMessages([{ role: 'assistant', content: response.data.response.content }]);
@@ -1254,7 +1252,7 @@ export function ReviewerPage() {
       }
       actions={
         <div className="flex justify-between">
-          <Button variant="outline" onClick={() => navigate('/executive-summary')}>
+          <Button variant="outline" onClick={() => navigate('/summary')}>
             ← Back to Executive Summary
           </Button>
           <Button onClick={() => navigate('/configuration')}>
