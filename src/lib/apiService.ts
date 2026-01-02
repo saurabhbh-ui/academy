@@ -1,5 +1,5 @@
 import { apiClient, streamSSE } from './api';
-import type { SourceDocument, Message } from '@/types';
+import type { SourceDocument, Message, BriefInstructions } from '@/types';
 
 // File parsing
 export async function parseFiles(files: File[]): Promise<SourceDocument[]> {
@@ -21,17 +21,30 @@ export async function parseFiles(files: File[]): Promise<SourceDocument[]> {
 export async function* chatCompletion(data: {
   messages: Message[];
   artifact: string;
-  source: SourceDocument[];
+  source: SourceDocument[] | SourceDocument;
   stage?: string;
   config?: {
     title: string;
     tone: string;
-    brief_count: string;
-    sections_to_highlight?: string;
-    sections_to_exclude?: string;
+    briefCount: string;
+    sectionsToHighlight?: string;
+    sectionsToExclude?: string;
   };
+  briefInstructions?: BriefInstructions;
 }) {
-  yield* streamSSE('/api/chat/completion', data);
+  const sourceArray = Array.isArray(data.source) ? data.source : [data.source];
+  const normalizedSource = sourceArray.map((src) => ({
+    fileType: src.fileType || src.name || '.pdf',
+    content: src.content,
+    figures: src.figures || [],
+  }));
+
+  const payload = {
+    ...data,
+    source: normalizedSource,
+  };
+
+  yield* streamSSE('/api/chat/completion', payload);
 }
 
 // Adjust length

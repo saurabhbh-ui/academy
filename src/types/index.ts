@@ -7,15 +7,23 @@ export interface ParsedFile {
   markdown: string;
 }
 
+export interface Figure {
+  id: string;
+  b64image: string;
+  caption?: string;
+  footnote?: string;
+  pageNumber: number;
+}
+
 export interface SourceDocument {
-  name: string;
+  name?: string;
+  fileType?: string;
   content: string;
-  markdown: string;
-  figures?: any[];
+  figures?: Figure[];
 }
 
 export interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system' | 'developer';
   content: string;
 }
 
@@ -36,6 +44,16 @@ export interface Configuration {
   sectionsToExclude?: string;
 }
 
+export interface BriefInstructions {
+  title: string;
+  objectives: string;
+  overview: string;
+  content: string;
+  sectionTitle?: string;
+  sectionContent?: string;
+  index?: number;
+}
+
 export interface ConnectConfiguration {
   learnerProfileRole?: string;
   learnerProfileDepartment?: string;
@@ -54,6 +72,7 @@ export interface Brief {
   id: string;
   title: string;
   content: string;
+  instructions?: BriefInstructions;
 }
 
 export type WorkflowType = 'full_tutorial' | 'executive_summary';
@@ -85,22 +104,13 @@ export interface HistoryEntry {
   updatedAt: Date;
 }
 
-export interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 export interface ChatRequest {
   messages: Message[];
   artifact: string;
-  source: ParsedFile[];
+  source: SourceDocument[];
   config?: Configuration;
   stage: string;
-  briefInstructions?: {
-    sectionTitle: string;
-    sectionContent: string;
-    index: number;
-  };
+  briefInstructions?: BriefInstructions;
 }
 
 export type ArtifactLength = 'shortest' | 'shorter' | 'longer' | 'longest';
@@ -109,14 +119,14 @@ export type ArtifactLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export interface AdjustLengthRequest {
   messages: Message[];
   artifact: string;
-  source: ParsedFile[];
+  source: SourceDocument[];
   newLength: ArtifactLength;
 }
 
 export interface AdjustLevelRequest {
   messages: Message[];
   artifact: string;
-  source: ParsedFile[];
+  source: SourceDocument[];
   newLevel: ArtifactLevel;
 }
 
@@ -126,7 +136,7 @@ export interface UpdateSelectionRequest {
     block: string;
     selection: string;
   };
-  source: ParsedFile[];
+  source: SourceDocument[];
   query: string;
 }
 
