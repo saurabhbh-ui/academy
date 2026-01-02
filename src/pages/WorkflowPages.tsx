@@ -1,5 +1,5 @@
+import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { WorkflowLayout } from '@/components/Layout';
 import { Canvas } from '@/components/Canvas';
 import { ChatPanel } from '@/components/Chat';
@@ -240,339 +240,6 @@ export function OutlinePage() {
 // ============================================================================
 // BRIEFS PAGE - Fully Integrated
 // ============================================================================
-export function BriefsPage() {
-  const navigate = useNavigate();
-  const { index } = useParams<{ index?: string }>();
-  const currentBriefIndex = index ? parseInt(index) - 1 : 0; // URL is 1-indexed, array is 0-indexed
-  
-  const {
-    parsedSources,
-    configuration,
-    outlineContent,
-    briefsContent,
-    setBriefsContent,
-    setIsGenerating,
-    setCurrentStage,
-  } = useWorkflow();
-
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [generatingBriefIndex, setGeneratingBriefIndex] = useState(0);
-  const [totalBriefs, setTotalBriefs] = useState(0);
-  const [briefsList, setBriefsList] = useState<Array<{ id: string; title: string; content: string }>>([]);
-
-  // Parse briefs from content
-  const parseBriefs = (content: string) => {
-    const briefRegex = /## Brief (\d+):/g;
-    const matches = [...content.matchAll(briefRegex)];
-    
-    if (matches.length === 0) {
-      return [{ id: 'brief-1', title: 'Brief', content }];
-    }
-
-    const briefs: Array<{ id: string; title: string; content: string }> = [];
-    
-    for (let i = 0; i < matches.length; i++) {
-      const match = matches[i];
-      const briefNumber = match[1];
-      const startIndex = match.index! + match[0].length;
-      const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
-      const briefContent = content.substring(startIndex, endIndex).trim();
-      
-      briefs.push({
-        id: `brief-${briefNumber}`,
-        title: `Brief ${briefNumber}`,
-        content: `## Brief ${briefNumber}:\n\n${briefContent}`,
-      });
-    }
-
-    return briefs;
-  };
-
-  useEffect(() => {
-    setCurrentStage('brief');
-    
-    // Auto-redirect to /briefs/1 if at /briefs without index
-    if (!index && briefsContent) {
-      navigate('/briefs/1', { replace: true });
-      return;
-    }
-    
-    if (!briefsContent && outlineContent && parsedSources.length > 0 && configuration) {
-      generateBriefs();
-    } else {
-      setIsInitializing(false);
-      if (briefsContent) {
-        setBriefsList(parseBriefs(briefsContent));
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (briefsContent) {
-      const parsed = parseBriefs(briefsContent);
-      console.log('Parsed briefs:', parsed.length, 'Current index:', currentBriefIndex);
-      setBriefsList(parsed);
-      
-      // If we have briefs but no index in URL, redirect to first brief
-      if (!index && parsed.length > 0) {
-        navigate('/briefs/1', { replace: true });
-      }
-    }
-  }, [briefsContent]);
-
-  const generateBriefs = async () => {
-    if (!configuration || !outlineContent || parsedSources.length === 0) {
-      console.error('Missing configuration, outline, or sources');
-      setIsInitializing(false);
-      return;
-    }
-
-    setIsGenerating(true);
-    setIsLoading(true);
-    setIsInitializing(true);
-
-    try {
-      // Step 1: Extract brief instructions from outline
-      const extractResponse = await apiClient.post('/api/brief/extract-instructions', {
-        config: {
-          title: configuration.title,
-          tone: configuration.tone,
-          brief_count: configuration.numberOfBriefs,
-          sections_to_highlight: configuration.sectionsToHighlight || '',
-          sections_to_exclude: configuration.sectionsToExclude || '',
-        },
-        outline_artifact: {
-          content: outlineContent,
-        },
-      });
-
-      const briefInstructions = extractResponse.data.briefs;
-      setTotalBriefs(briefInstructions.length);
-
-      // Step 2: Generate each brief
-      let allBriefs = '';
-      for (let i = 0; i < briefInstructions.length; i++) {
-        setGeneratingBriefIndex(i + 1);
-        
-        const response = await apiClient.post('/api/brief/generate', {
-          source: parsedSources,
-          brief_instructions: briefInstructions[i],
-        });
-
-        allBriefs += response.data.content + '\n\n---\n\n';
-        setBriefsContent(allBriefs);
-      }
-
-      setMessages([{ role: 'assistant', content: `Successfully generated ${briefInstructions.length} briefs!` }]);
-      
-      // Navigate to first brief after generation
-      navigate('/briefs/1');
-    } catch (error) {
-      console.error('Error generating briefs:', error);
-      setMessages([{ role: 'assistant', content: 'Sorry, there was an error generating the briefs. Please check your backend connection.' }]);
-    } finally {
-      setIsGenerating(false);
-      setIsLoading(false);
-      setIsInitializing(false);
-    }
-  };
-
-  const handleSendMessage = async (message: string) => {
-    if (!parsedSources.length || !configuration) return;
-
-    setMessages((prev) => [...prev, { role: 'user', content: message }]);
-    setIsLoading(true);
-
-    try {
-      let response = '';
-      let updatedArtifact = briefsContent;
-      
-      const generator = chatCompletion({
-        messages: [...messages, { role: 'user', content: message }],
-        artifact: briefsContent,
-        source: parsedSources,
-        stage: 'brief',
-        config: {
-          title: configuration.title,
-          tone: configuration.tone,
-          brief_count: configuration.numberOfBriefs,
-          sections_to_highlight: configuration.sectionsToHighlight || '',
-          sections_to_exclude: configuration.sectionsToExclude || '',
-        },
-      });
-
-      for await (const chunk of generator) {
-        if (chunk.content) response += chunk.content;
-        if (chunk.artifact) updatedArtifact = chunk.artifact;
-      }
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: response || 'Content updated successfully.' }]);
-      if (updatedArtifact !== briefsContent) setBriefsContent(updatedArtifact);
-    } catch (error) {
-      console.error('Error:', error);
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request.' }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAdjustLevel = async (level: 'Beginner' | 'Intermediate' | 'Advanced') => {
-    if (!parsedSources.length) return;
-
-    setIsLoading(true);
-    setMessages((prev) => [...prev, { role: 'user', content: `Adjust to ${level} level` }]);
-
-    try {
-      let newContent = '';
-      const generator = adjustLevel({
-        newLevel: level,
-        messages,
-        artifact: briefsContent,
-        source: parsedSources,
-      });
-
-      for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
-      }
-
-      if (newContent) {
-        setBriefsContent(newContent);
-        setMessages((prev) => [...prev, { role: 'assistant', content: `Content adjusted to ${level} level.` }]);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the level.' }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAdjustLength = async (length: 'shortest' | 'shorter' | 'longer' | 'longest') => {
-    if (!parsedSources.length) return;
-
-    setIsLoading(true);
-    setMessages((prev) => [...prev, { role: 'user', content: `Make it ${length}` }]);
-
-    try {
-      let newContent = '';
-      const generator = adjustLength({
-        newLength: length,
-        messages,
-        artifact: briefsContent,
-        source: parsedSources,
-      });
-
-      for await (const chunk of generator) {
-        if (chunk.content) newContent = chunk.content;
-      }
-
-      if (newContent) {
-        setBriefsContent(newContent);
-        setMessages((prev) => [...prev, { role: 'assistant', content: `Content made ${length}.` }]);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, there was an error adjusting the length.' }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleExport = () => {
-    console.log('Export briefs');
-  };
-
-  const handleImport = () => {
-    console.log('Import briefs');
-  };
-
-  if (!parsedSources.length || !configuration || !outlineContent) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>
-        <p className="text-muted-foreground mb-4">Please complete the outline step first.</p>
-        <Button onClick={() => navigate('/outline')}>Go to Outline</Button>
-      </div>
-    );
-  }
-
-  return (
-    <WorkflowLayout
-      title={briefsList.length > 0 && briefsList[currentBriefIndex] ? briefsList[currentBriefIndex].title : "Briefs"}
-      description="Review and refine the detailed content briefs"
-      canvas={
-        isInitializing ? (
-          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
-            <div className="text-center">
-              <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
-              <p className="text-lg font-medium">Generating briefs...</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                {totalBriefs > 0 ? `Brief ${generatingBriefIndex} of ${totalBriefs}` : 'This may take a few moments'}
-              </p>
-            </div>
-          </div>
-        ) : briefsList.length > 0 && briefsList[currentBriefIndex] ? (
-          <Canvas
-            content={briefsList[currentBriefIndex].content}
-            onChange={(newContent) => {
-              // Update specific brief in the full content
-              const updatedBriefs = briefsList.map((b, i) =>
-                i === currentBriefIndex ? { ...b, content: newContent } : b
-              );
-              const fullContent = updatedBriefs.map((b) => b.content).join('\n\n---\n\n');
-              setBriefsContent(fullContent);
-            }}
-            onExport={handleExport}
-            onImport={handleImport}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full border rounded-lg bg-card">
-            <p className="text-muted-foreground">No brief content available</p>
-          </div>
-        )
-      }
-      chat={
-        <ChatPanel
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          onAdjustLevel={handleAdjustLevel}
-          onAdjustLength={handleAdjustLength}
-          placeholder="Ask AI to refine the briefs..."
-          isLoading={isLoading}
-        />
-      }
-      actions={
-        <div className="flex justify-between">
-          {currentBriefIndex > 0 ? (
-            <Button variant="outline" onClick={() => navigate(`/briefs/${currentBriefIndex}`)}>
-              ← Previous Brief
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => navigate('/outline')}>
-              ← Back to Outline
-            </Button>
-          )}
-          
-          <div className="text-sm text-muted-foreground">
-            {briefsList.length > 0 && `Brief ${currentBriefIndex + 1} of ${briefsList.length}`}
-          </div>
-          
-          {currentBriefIndex < briefsList.length - 1 ? (
-            <Button onClick={() => navigate(`/briefs/${currentBriefIndex + 2}`)}>
-              Next Brief →
-            </Button>
-          ) : (
-            <Button onClick={() => navigate('/connect-configuration')} disabled={!briefsContent}>
-              Continue to Connect Config →
-            </Button>
-          )}
-        </div>
-      }
-    />
-  );
-}
 
 // ============================================================================
 // CONNECT CONFIG PAGE
@@ -601,7 +268,7 @@ export function ConnectPage() {
   const navigate = useNavigate();
   const {
     parsedSources,
-    briefsContent,
+    briefsData,
     connectConfiguration,
     connectContent,
     setConnectContent,
@@ -613,37 +280,9 @@ export function ConnectPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Parse briefs from content
-  const parseBriefs = (content: string) => {
-    const briefRegex = /## Brief (\d+):/g;
-    const matches = [...content.matchAll(briefRegex)];
-    
-    if (matches.length === 0) {
-      return [{ id: 'brief-1', title: 'Brief', content }];
-    }
-
-    const briefs: Array<{ id: string; title: string; content: string }> = [];
-    
-    for (let i = 0; i < matches.length; i++) {
-      const match = matches[i];
-      const briefNumber = match[1];
-      const startIndex = match.index! + match[0].length;
-      const endIndex = i < matches.length - 1 ? matches[i + 1].index! : content.length;
-      const briefContent = content.substring(startIndex, endIndex).trim();
-      
-      briefs.push({
-        id: `brief-${briefNumber}`,
-        title: `Brief ${briefNumber}`,
-        content: `## Brief ${briefNumber}:\n\n${briefContent}`,
-      });
-    }
-
-    return briefs;
-  };
-
   useEffect(() => {
     setCurrentStage('connect');
-    if (!connectContent && briefsContent && parsedSources.length > 0 && connectConfiguration) {
+    if (!connectContent && briefsData && briefsData.length > 0 && parsedSources.length > 0 && connectConfiguration) {
       generateConnect();
     } else {
       setIsInitializing(false);
@@ -651,7 +290,7 @@ export function ConnectPage() {
   }, []);
 
   const generateConnect = async () => {
-    if (!connectConfiguration || !briefsContent || parsedSources.length === 0) {
+    if (!connectConfiguration || !briefsData || briefsData.length === 0 || parsedSources.length === 0) {
       console.error('Missing connect configuration, briefs, or sources');
       setIsInitializing(false);
       return;
@@ -662,13 +301,10 @@ export function ConnectPage() {
     setIsInitializing(true);
 
     try {
-      // Parse briefs into array format
-      const briefsList = parseBriefs(briefsContent);
-      
       const response = await apiClient.post('/api/connect/generate-connect', {
-        briefs: briefsList.map(brief => ({ content: brief.content })),
+        briefs: briefsData.map(brief => ({ content: brief.content })),
         parsedOutline: {
-          briefs: briefsList.map((brief, index) => ({
+          briefs: briefsData.map((brief, index) => ({
             brief_number: index + 1,
             topic: brief.title || `Brief ${index + 1}`,
             pages: [],
@@ -741,7 +377,7 @@ export function ConnectPage() {
     console.log('Import connect');
   };
 
-  if (!parsedSources.length || !briefsContent || !connectConfiguration) {
+  if (!parsedSources.length || !briefsData || briefsData.length === 0 || !connectConfiguration) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <h2 className="text-2xl font-bold mb-2">Missing Prerequisites</h2>

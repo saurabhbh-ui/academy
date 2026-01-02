@@ -1,8 +1,8 @@
 export { HomePage } from './HomePage';
 export { ConfigurationPage } from './ConfigurationPage';
+export { BriefsPage } from './BriefsPage';
 export {
   OutlinePage,
-  BriefsPage,
   ConnectConfigPage,
   ConnectPage,
   TestYourselfPage,
